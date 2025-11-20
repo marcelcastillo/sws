@@ -74,29 +74,29 @@ parse_request_line(char *line, char *method, size_t method_sz, char *path,
 	return 0;
 }
 
-int
+enum HTTP_PARSE_RESULT
 parse_http_request(FILE *stream, struct http_request *request)
 {
 	char line[2048];
 	memset(request, 0, sizeof(*request));
 
 	if (fgets(line, sizeof(line), stream) == NULL) {
-		return -1;
+		return HTTP_PARSE_EOF;
 	}
 
 	if (parse_request_line(line, request->method, MAX_METHOD, request->path,
 	                       MAX_URI, request->version, MAX_VERSION) != 0) {
-		return -1;
+		return HTTP_PARSE_LINE_FAILURE;
 	}
 
 	if (validate_method(request->method) == -1) {
-		return -1;
+		return HTTP_PARSE_INVALID_METHOD;
 	}
 	if (validate_uri(request->path) == -1) {
-		return -1;
+		return HTTP_PARSE_INVALID_URI;
 	}
 	if (validate_version(request->version) == -1) {
-		return -1;
+		return HTTP_PARSE_INVALID_VERSION;
 	}
 
 	request->if_modified_since[0] = '\0';
@@ -112,5 +112,5 @@ parse_http_request(FILE *stream, struct http_request *request)
 		}
 	}
 
-	return 0;
+	return HTTP_PARSE_OK;
 }

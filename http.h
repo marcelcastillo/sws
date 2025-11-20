@@ -14,6 +14,15 @@ struct http_request {
 	char if_modified_since[MAX_HEADER_VALUE];
 };
 
+enum HTTP_PARSE_RESULT {
+	HTTP_PARSE_OK = 0,
+	HTTP_PARSE_INVALID_METHOD = -1,
+	HTTP_PARSE_INVALID_URI = -2,
+	HTTP_PARSE_INVALID_VERSION = -3,
+	HTTP_PARSE_EOF = -4,
+	HTTP_PARSE_LINE_FAILURE = -5,
+};
+
 /*
  * Validates the HTTP method.
  * Returns -1 on invalid method, 0 on success.
@@ -48,6 +57,7 @@ int parse_request_line(char *line, char *method, size_t method_sz, char *path,
 
 /*
  * Parses an HTTP request from the given stream into the http_request struct.
- * Returns -1 on failure, 0 on success.
+ * Returns an HTTP_PARSE_RESULT indicating success or type of failure.
  */
-int parse_http_request(FILE *stream, struct http_request *request);
+enum HTTP_PARSE_RESULT parse_http_request(FILE *stream,
+                                          struct http_request *request);
