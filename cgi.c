@@ -79,7 +79,6 @@ cgi_handle(int client_fd, const struct http_request *req, const char *cgi_dir)
 		 * For now, we let the CGI produce the full HTTP response
 		 * (status line + headers + body).
 		 */
-
 		const char *method = req->method;
 
 		if (setenv("REQUEST_METHOD", method, 1) == -1) {
@@ -92,15 +91,11 @@ cgi_handle(int client_fd, const struct http_request *req, const char *cgi_dir)
 			_exit(1);
 		}
 
-		/* TODO later: SCRIPT_NAME, REMOTE_ADDR, etc. */
+		/* TODO LEFT: SCRIPT_NAME, REMOTE_ADDR, etc. */
 
 		if (dup2(client_fd, STDOUT_FILENO) == -1) {
 			_exit(1);
 		}
-		/* Optional: dup2(client_fd, STDIN_FILENO) if we ever support POST */
-
-		/* Close everything else if you like; in this simple version, we just
-		 * exec. */
 
 		execl(script_path, script_path, (char *)NULL);
 

@@ -139,3 +139,57 @@ craft_http_response(FILE *stream, enum HTTP_STATUS_CODE status_code,
 	}
 	return 0;
 }
+
+int
+handle_http_connection(FILE *stream)
+{
+	struct http_request req;
+	enum HTTP_PARSE_RESULT res;
+	int is_head = 0;
+
+	memset(&req, 0, sizeof(req));
+
+	res = parse_http_request(stream, &req);
+
+	if (res != HTTP_PARSE_OK) {
+		enum HTTP_STATUS_CODE status;
+		const char *text;
+		const char *body;
+
+		switch (res) {
+		case HTTP_PARSE_INVALID_METHOD:
+			status = HTTP_STATUS_NOT_IMPLEMENTED;
+			text = "Not Implemented";
+			body = "501 Not Implemented\n";
+			break;
+
+		case HTTP_PARSE_INVALID_VERSION:
+			/* For now, treat bad/unsupported versions as 400. */
+			status = HTTP_STATUS_BAD_REQUEST;
+			text = "Bad Request";
+			body = "400 Bad Request\n";
+			break;
+
+		case HTTP_PARSE_INVALID_URI:
+		case HTTP_PARSE_LINE_FAILURE:
+		case HTTP_PARSE_EOF:
+		default:
+			status = HTTP_STATUS_BAD_REQUEST;
+			text = "Bad Request";
+			body = "400 Bad Request\n";
+			break;
+		}
+
+		craft_http_response(stream, status, text, body, "text/plain",
+		                    0 /* is_head */);
+		return -1;
+	}
+
+	/* If we got here, parse_http_request validated method/URI/version. */
+	is_head = (strcmp(req.method, "HEAD") == 0);
+
+	/* For the snapshot: just send a simple 200 OK. */
+	craft_http_response(stream, HTTP_STATUS_OK, "OK", "OK\n", "text/plain",
+	                    is_head);
+	return 0;
+}

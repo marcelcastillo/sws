@@ -88,3 +88,10 @@ enum HTTP_PARSE_RESULT parse_http_request(FILE *stream,
 int craft_http_response(FILE *stream, enum HTTP_STATUS_CODE status_code,
                         const char *status_text, const char *body,
                         const char *content_type, int is_head);
+
+/*
+ * Handles a single HTTP connection on the given stream.
+ * Parses the request and sends a minimal HTTP/1.0 response.
+ * Returns 0 on success, -1 on error.
+ */
+int handle_http_connection(FILE *stream);
