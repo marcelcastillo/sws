@@ -23,6 +23,24 @@ enum HTTP_PARSE_RESULT {
 	HTTP_PARSE_LINE_FAILURE = -5,
 };
 
+enum HTTP_STATUS_CODE {
+	HTTP_STATUS_OK = 200,
+	HTTP_STATUS_CREATED = 201,
+	HTTP_STATUS_ACCEPTED = 202,
+	HTTP_STATUS_NO_CONTENT = 204,
+	HTTP_STATUS_MOVED_PERMANENTLY = 301,
+	HTTP_STATUS_MOVED_TEMPORARILY = 302,
+	HTTP_STATUS_NOT_MODIFIED = 304,
+	HTTP_STATUS_BAD_REQUEST = 400,
+	HTTP_STATUS_UNAUTHORIZED = 401,
+	HTTP_STATUS_FORBIDDEN = 403,
+	HTTP_STATUS_NOT_FOUND = 404,
+	HTTP_STATUS_INTERNAL_SERVER_ERROR = 500,
+	HTTP_STATUS_NOT_IMPLEMENTED = 501,
+	HTTP_STATUS_BAD_GATEWAY = 502,
+	HTTP_STATUS_SERVICE_UNAVAILABLE = 503,
+};
+
 /*
  * Validates the HTTP method.
  * Returns -1 on invalid method, 0 on success.
@@ -61,3 +79,12 @@ int parse_request_line(char *line, char *method, size_t method_sz, char *path,
  */
 enum HTTP_PARSE_RESULT parse_http_request(FILE *stream,
                                           struct http_request *request);
+
+/*
+ * Crafts and writes an HTTP response to the given stream.
+ * If is_head is non-zero, the body will not be included in the response.
+ * Returns 0 on success.
+ */
+int craft_http_response(FILE *stream, enum HTTP_STATUS_CODE status_code,
+                        const char *status_text, const char *body,
+                        const char *content_type, int is_head);

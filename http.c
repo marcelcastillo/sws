@@ -2,6 +2,7 @@
 
 #include <ctype.h>
 #include <string.h>
+#include <time.h>
 
 int
 validate_method(const char *method)
@@ -113,4 +114,28 @@ parse_http_request(FILE *stream, struct http_request *request)
 	}
 
 	return HTTP_PARSE_OK;
+}
+
+int
+craft_http_response(FILE *stream, enum HTTP_STATUS_CODE status_code,
+                    const char *status_text, const char *body,
+                    const char *content_type, int is_head)
+{
+	time_t now = time(NULL);
+	struct tm gmt;
+	gmtime_r(&now, &gmt);
+	char date_buf[64];
+	strftime(date_buf, sizeof(date_buf), "%a, %d %b %Y %H:%M:%S GMT", &gmt);
+
+	fprintf(stream, "HTTP/1.0 %d %s\r\n", status_code, status_text);
+	fprintf(stream, "Date: %s\r\n", date_buf);
+	fprintf(stream, "Server: sws/1.0\r\n");
+	fprintf(stream, "Content-Length: %zu\r\n", strlen(body));
+	fprintf(stream, "Content-Type: %s\r\n",
+	        content_type ? content_type : "text/plain");
+	fprintf(stream, "\r\n");
+	if (!is_head && body) {
+		fprintf(stream, "%s", body);
+	}
+	return 0;
 }
