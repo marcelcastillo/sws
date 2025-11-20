@@ -158,3 +158,40 @@ main(int argc, char *argv[])
 	              have_bind_address, log_file, port);
 	return 0;
 }
+
+// #include <stdio.h>
+// #include <stdlib.h>
+// #include <string.h>
+//
+// #include "http.h"
+//
+// int
+// main()
+// {
+// 	const char *test_request =
+// 		"GET /index.html HTTP/1.1 \r\n"
+// 		"Host: localhost\r\n"
+// 		"If-Modified-Since: Wed, 21 Oct 2015 07:28:00 GMT\r\n"
+// 		"\r\n";
+//
+// 	FILE *stream = tmpfile();
+// 	if (!stream) {
+// 		perror("tmpfile");
+// 		return 1;
+// 	}
+// 	fwrite(test_request, 1, strlen(test_request), stream);
+// 	rewind(stream);
+//
+// 	struct http_request req;
+// 	if (parse_http_request(stream, &req) == 0) {
+// 		printf("Method: %s\n", req.method);
+// 		printf("URI: %s\n", req.path);
+// 		printf("Version: %s\n", req.version);
+// 		printf("If-Modified-Since: %s\n", req.if_modified_since);
+// 	} else {
+// 		printf("Failed to parse HTTP request\n");
+// 	}
+//
+// 	fclose(stream);
+// 	return 0;
+// }
