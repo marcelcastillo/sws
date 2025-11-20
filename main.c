@@ -6,6 +6,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "server.h"
+
 static void
 usage()
 {
@@ -109,6 +111,10 @@ main(int argc, char *argv[])
 
 	char *log_file = NULL;
 	in_port_t port = htons(8080);
+    struct server_config config;
+
+    memset(&config, 0, sizeof(config));
+
 	/* char *docroot = NULL; */
 
 	int option;
@@ -156,6 +162,18 @@ main(int argc, char *argv[])
 
 	print_options(cgi_dir, debug_mode, &bind_addr, bind_addrlen,
 	              have_bind_address, log_file, port);
+    
+    /* Build the config struct */
+    config.cgi_dir = cgi_dir;
+    config.debug_mode = debug_mode;
+    config.bind_addr = bind_addr;
+    config.bind_addrlen = bind_addrlen;
+    config.have_bind_address = have_bind_address;
+    config.logfile = log_file;
+    config.port = port;
+
+    runServer(&config);
+
 	return 0;
 }
 
