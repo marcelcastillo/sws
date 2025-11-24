@@ -1,18 +1,18 @@
+# sws Makefile
+
 CC = gcc
-CFLAGS = -Wall -Wextra -Werror -g
-SRCS = $(wildcard *.c)
-OBJS = $(SRCS:.c=.o)
-EXEC = sws
+PROG = sws
+OBJS = main.o cgi.o http.o server.o
+CFLAGS = -Wall -Werror -Wextra -g
 
-.PHONY: all clean
+all: ${PROG}
 
-all: $(EXEC)
+depend:
+	mkdep -- ${CFLAGS} *.c
 
-$(EXEC): $(OBJS)
-	$(CC) $(CFLAGS) -o $@ $^
-
-%.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $@
+${PROG}: ${OBJS}
+	@echo $@ depends on $?
+	${CC} ${OBJS} -o ${PROG} ${LDFLAGS}
 
 clean:
-	rm -f $(OBJS) $(EXEC)
+	rm -f ${PROG} ${OBJS}
