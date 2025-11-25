@@ -1,20 +1,22 @@
 #ifndef SERVER_H
 #define SERVER_H
 
-#include <netinet/in.h>
 #include <sys/socket.h>
+#include <netinet/in.h>
 
-struct server_config{
+struct server_config {
 
-    char *cgi_dir;
-    int debug_mode;
+	char *cgi_dir;
+	int debug_mode;
 
-    struct sockaddr_storage bind_addr;
-    socklen_t bind_addrlen;
-    int have_bind_address;
+	struct sockaddr_storage bind_addr;
+	socklen_t bind_addrlen;
+	int have_bind_address;
 
-    char *logfile;
-    int port;
+	char *logfile;
+	int port;
+
+	char *docroot;
 };
 
 void runServer(struct server_config *cfg);

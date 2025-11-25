@@ -1,11 +1,12 @@
-#include <arpa/inet.h>
-#include <netinet/in.h>
+#include "server.h"
 
-#include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/time.h>
+#include <sys/types.h>
 #include <sys/wait.h>
+#include <netinet/in.h>
 
+#include <arpa/inet.h>
 #include <errno.h>
 #include <signal.h>
 #include <stdio.h>
@@ -13,71 +14,70 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "server.h"
 #include "http.h"
 
 
 #define BACKLOG 5
 
-#define SLEEP   5
+#define SLEEP 5
 
+int
+createSocket(struct server_config *config)
+{
+	int sock;
+	socklen_t length;
+	struct sockaddr_storage server;
+	struct sockaddr_in *sin;
+	struct sockaddr_in6 *sin6;
 
-int createSocket(struct server_config *config)
-{   
-    int sock;
-    socklen_t length;
-    struct sockaddr_storage server;
-    struct sockaddr_in *sin;
-    struct sockaddr_in6 *sin6;
+	memset(&server, 0, sizeof(server));
 
-    memset(&server, 0, sizeof(server));
-    
-    /* A server address was provided */
-    if (config->have_bind_address) {
-        memcpy(&server, &config->bind_addr, sizeof(server));
-        length = config->bind_addrlen;
+	/* A server address was provided */
+	if (config->have_bind_address) {
+		memcpy(&server, &config->bind_addr, sizeof(server));
+		length = config->bind_addrlen;
 
-        /* Cast server as necessary */
-        if (server.ss_family == AF_INET){
-            sin = (struct sockaddr_in *)&server;
-            sin->sin_port = config->port;
-            length = sizeof(*sin);
-        } else if (server.ss_family == AF_INET6){
-            sin6 = (struct sockaddr_in6 *)&server;
-            sin6->sin6_port = config->port;
-            length = sizeof(*sin6);
-        } else {
-            perror("Invalid address domain");
-            exit(EXIT_FAILURE);
-            /* NOTREACHED */
-        }
-    /* No server address was provided */
-    } else {
-        sin6 = (struct sockaddr_in6 *)&server;
-        sin6->sin6_family = AF_INET6;
-        sin6->sin6_addr = in6addr_any;
-        sin6->sin6_port = config->port;
-        length = sizeof(*sin6);
-    }
-    
-    if ((sock = socket(server.ss_family, SOCK_STREAM, 0)) < 0){
-        perror("Opening Stream Socket");
-        exit(EXIT_FAILURE);
-        /* NOTREACHED */
-    }
-    if (bind(sock, (struct sockaddr *)&server, length) != 0){
-        perror("Binding stream socket");
-        exit(EXIT_FAILURE);
-        /* NOTREACHED */
-    }
+		/* Cast server as necessary */
+		if (server.ss_family == AF_INET) {
+			sin = (struct sockaddr_in *)&server;
+			sin->sin_port = config->port;
+			length = sizeof(*sin);
+		} else if (server.ss_family == AF_INET6) {
+			sin6 = (struct sockaddr_in6 *)&server;
+			sin6->sin6_port = config->port;
+			length = sizeof(*sin6);
+		} else {
+			perror("Invalid address domain");
+			exit(EXIT_FAILURE);
+			/* NOTREACHED */
+		}
+		/* No server address was provided */
+	} else {
+		sin6 = (struct sockaddr_in6 *)&server;
+		sin6->sin6_family = AF_INET6;
+		sin6->sin6_addr = in6addr_any;
+		sin6->sin6_port = config->port;
+		length = sizeof(*sin6);
+	}
 
-    length = sizeof(server);
+	if ((sock = socket(server.ss_family, SOCK_STREAM, 0)) < 0) {
+		perror("Opening Stream Socket");
+		exit(EXIT_FAILURE);
+		/* NOTREACHED */
+	}
+	if (bind(sock, (struct sockaddr *)&server, length) != 0) {
+		perror("Binding stream socket");
+		exit(EXIT_FAILURE);
+		/* NOTREACHED */
+	}
+
+	length = sizeof(server);
 	if (getsockname(sock, (struct sockaddr *)&server, &length) != 0) {
 		perror("getting socket name");
 		exit(EXIT_FAILURE);
 		/* NOTREACHED */
 	}
-    if (server.ss_family == AF_INET) {
+	if (server.ss_family == AF_INET) {
 		(void)printf("Socket has port #%d\n", ntohs(sin->sin_port));
 	} else if (server.ss_family == AF_INET6) {
 		(void)printf("Socket has port #%d\n", ntohs(sin6->sin6_port));
@@ -90,140 +90,139 @@ int createSocket(struct server_config *config)
 	}
 
 	return sock;
-
 }
 
 void
-handleConnection(int fd, struct sockaddr_storage client, struct server_config *config)
-{   
-    int res;
-    const char *rip;
-    char addrbuf[INET6_ADDRSTRLEN];
+handleConnection(int fd, struct sockaddr_storage client,
+                 struct server_config *config)
+{
+	int res;
+	const char *rip;
+	char addrbuf[INET6_ADDRSTRLEN];
 
 
-    /* Convert client address to string */
-    if (client.ss_family == AF_INET) {
-        struct sockaddr_in *sin = (struct sockaddr_in *)&client;
-        rip = inet_ntop(AF_INET, &sin->sin_addr, addrbuf, sizeof(addrbuf));
-    } else if (client.ss_family == AF_INET6) {
-        struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *)&client;
-        rip = inet_ntop(AF_INET6, &sin6->sin6_addr, addrbuf, sizeof(addrbuf));
-    } else {
-        rip = "unknown";
-    }
+	/* Convert client address to string */
+	if (client.ss_family == AF_INET) {
+		struct sockaddr_in *sin = (struct sockaddr_in *)&client;
+		rip = inet_ntop(AF_INET, &sin->sin_addr, addrbuf, sizeof(addrbuf));
+	} else if (client.ss_family == AF_INET6) {
+		struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *)&client;
+		rip = inet_ntop(AF_INET6, &sin6->sin6_addr, addrbuf, sizeof(addrbuf));
+	} else {
+		rip = "unknown";
+	}
 
-    if (config->debug_mode){
-        printf("Client connected from %s\n", rip);
-    }
+	if (config->debug_mode) {
+		printf("Client connected from %s\n", rip);
+	}
 
-    FILE *stream = fdopen(fd, "r+");
-    if (stream == NULL) {
-        perror("fdopen");
-        close(fd);
-        exit(EXIT_FAILURE);
-    }
+	FILE *stream = fdopen(fd, "r+");
+	if (stream == NULL) {
+		perror("fdopen");
+		close(fd);
+		exit(EXIT_FAILURE);
+	}
 
-    if ((res = handle_http_connection(stream)) < 0){
-        printf("Bad request\n");
-    }
+	if ((res = handle_http_connection(stream, config)) < 0) {
+		if (config->debug_mode) {
+			printf("Bad request\n");
+		}
+	}
 
-    fclose(stream);
-    exit(EXIT_SUCCESS);
-
+	fclose(stream);
+	exit(EXIT_SUCCESS);
 }
 
 void
 handleSocket(int server_sock, struct server_config *config)
-{   
-    int fd;
-    pid_t pid;
-    struct sockaddr_storage client;
-    socklen_t length = sizeof(client);
+{
+	int fd;
+	pid_t pid;
+	struct sockaddr_storage client;
+	socklen_t length = sizeof(client);
 
-    memset(&client, 0, length);
+	memset(&client, 0, length);
 
-    if ((fd = accept(server_sock, (struct sockaddr *)&client, &length)) < 0){
-        perror("Accept");
-        return;
-    }
+	if ((fd = accept(server_sock, (struct sockaddr *)&client, &length)) < 0) {
+		perror("Accept");
+		return;
+	}
 
-    /* Debug mode does not fork */
-    if (config->debug_mode) {
-        /* No fork() in debug mode */
-        handleConnection(fd, client, config);
-        /* NOTREACHED */
-    }
+	/* Debug mode does not fork */
+	if (config->debug_mode) {
+		/* No fork() in debug mode */
+		handleConnection(fd, client, config);
+		/* NOTREACHED */
+	}
 
-    if ((pid = fork()) < 0){
-        perror("fork");
-        close(fd);
-        return;
-    }
-    
-    /* Child process */
-    if (pid == 0){
-        handleConnection(fd, client, config);
-        /* NOTREACHED */
-    }
+	if ((pid = fork()) < 0) {
+		perror("fork");
+		close(fd);
+		return;
+	}
 
-    /* Parent Process */
-    close(fd);
-    return;
+	/* Child process */
+	if (pid == 0) {
+		handleConnection(fd, client, config);
+		/* NOTREACHED */
+	}
+
+	/* Parent Process */
+	close(fd);
+	return;
 }
 
-void 
+void
 reap(int sig)
 {
-    (void)sig;
-    while (waitpid(-1, NULL, WNOHANG) > 0)
-        ;
+	(void)sig;
+	while (waitpid(-1, NULL, WNOHANG) > 0)
+		;
 }
-
 
 void
 runServer(struct server_config *config)
 {
-    int server_sock;
+	int server_sock;
 
-    if (signal(SIGCHLD, reap) == SIG_ERR){
-        perror("Signal");
-        exit(EXIT_FAILURE);
-    }
-    
-    server_sock = createSocket(config);
-    
-    /* In debug mode... */
-    if (config->debug_mode){
-        printf("Server running in debug mode.\n");
-        handleSocket(server_sock, config);
-        printf("Debug mode exiting.\n");
-        return;
-    }
-    
-    /* In normal mode */
-    for (;;){
-        fd_set ready;
-        struct timeval timeout;
+	if (signal(SIGCHLD, reap) == SIG_ERR) {
+		perror("Signal");
+		exit(EXIT_FAILURE);
+	}
 
-        FD_ZERO(&ready);
-        FD_SET(server_sock, &ready);
+	server_sock = createSocket(config);
 
-        timeout.tv_sec = SLEEP;
-        timeout.tv_usec = 0;
+	/* In debug mode... */
+	if (config->debug_mode) {
+		printf("Server running in debug mode.\n");
+		handleSocket(server_sock, config);
+		printf("Debug mode exiting.\n");
+		return;
+	}
 
-        if (select(server_sock + 1, &ready, 0, 0, &timeout) < 0){
-            if (errno != EINTR){
-                perror("select");
-            }
-            continue;
-        }
+	/* In normal mode */
+	for (;;) {
+		fd_set ready;
+		struct timeval timeout;
 
-        if (FD_ISSET(server_sock, &ready)){
-            handleSocket(server_sock, config);
-        } else {
-           (void)printf("Idly sitting here, waiting for connections...\n");
-        }
-    }
-    return;
+		FD_ZERO(&ready);
+		FD_SET(server_sock, &ready);
 
+		timeout.tv_sec = SLEEP;
+		timeout.tv_usec = 0;
+
+		if (select(server_sock + 1, &ready, 0, 0, &timeout) < 0) {
+			if (errno != EINTR) {
+				perror("select");
+			}
+			continue;
+		}
+
+		if (FD_ISSET(server_sock, &ready)) {
+			handleSocket(server_sock, config);
+		} else {
+			(void)printf("Idly sitting here, waiting for connections...\n");
+		}
+	}
+	return;
 }

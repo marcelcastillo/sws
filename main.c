@@ -111,11 +111,11 @@ main(int argc, char *argv[])
 
 	char *log_file = NULL;
 	in_port_t port = htons(8080);
-    struct server_config config;
+	struct server_config config;
 
-    memset(&config, 0, sizeof(config));
+	memset(&config, 0, sizeof(config));
 
-	/* char *docroot = NULL; */
+	char *docroot = NULL;
 
 	int option;
 
@@ -150,29 +150,29 @@ main(int argc, char *argv[])
 		}
 	}
 
-	/*
 	if (optind < argc) {
-	    docroot = argv[optind];
+		docroot = argv[optind];
 	} else {
-	    fprintf(stderr, "Missing required document root directory argument!\n");
-	    usage();
-	    exit(1);
+		fprintf(stderr, "Missing required document root directory argument!\n");
+		usage();
+		exit(1);
 	}
-	*/
+
 
 	print_options(cgi_dir, debug_mode, &bind_addr, bind_addrlen,
 	              have_bind_address, log_file, port);
-    
-    /* Build the config struct */
-    config.cgi_dir = cgi_dir;
-    config.debug_mode = debug_mode;
-    config.bind_addr = bind_addr;
-    config.bind_addrlen = bind_addrlen;
-    config.have_bind_address = have_bind_address;
-    config.logfile = log_file;
-    config.port = port;
 
-    runServer(&config);
+	/* Build the config struct */
+	config.cgi_dir = cgi_dir;
+	config.debug_mode = debug_mode;
+	config.bind_addr = bind_addr;
+	config.bind_addrlen = bind_addrlen;
+	config.have_bind_address = have_bind_address;
+	config.logfile = log_file;
+	config.port = port;
+	config.docroot = docroot;
+
+	runServer(&config);
 
 	return 0;
 }

@@ -14,6 +14,8 @@ struct http_request {
 	char if_modified_since[MAX_HEADER_VALUE];
 };
 
+struct server_config;
+
 enum HTTP_PARSE_RESULT {
 	HTTP_PARSE_OK = 0,
 	HTTP_PARSE_INVALID_METHOD = -1,
@@ -91,7 +93,7 @@ int craft_http_response(FILE *stream, enum HTTP_STATUS_CODE status_code,
 
 /*
  * Handles a single HTTP connection on the given stream.
- * Parses the request and sends a minimal HTTP/1.0 response.
+ * Uses server_config (docroot, cgi_dir, etc.) to route the request.
  * Returns 0 on success, -1 on error.
  */
-int handle_http_connection(FILE *stream);
+int handle_http_connection(FILE *stream, const struct server_config *cfg);

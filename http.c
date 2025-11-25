@@ -1,8 +1,17 @@
 #include "http.h"
 
+#include <sys/stat.h>
+
 #include <ctype.h>
+#include <fcntl.h>
+#include <limits.h>
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <unistd.h>
+
+#include "cgi.h"
+#include "server.h"
 
 int
 validate_method(const char *method)
@@ -140,8 +149,137 @@ craft_http_response(FILE *stream, enum HTTP_STATUS_CODE status_code,
 	return 0;
 }
 
+static const char *
+guess_content_type(const char *path)
+{
+	const char *dot = strrchr(path, '.');
+	if (!dot) {
+		return "text/plain";
+	}
+
+	if (strcmp(dot, ".html") == 0 || strcmp(dot, ".htm") == 0) {
+		return "text/html";
+	}
+	if (strcmp(dot, ".txt") == 0) {
+		return "text/plain";
+	}
+	if (strcmp(dot, ".jpg") == 0 || strcmp(dot, ".jpeg") == 0) {
+		return "image/jpeg";
+	}
+	if (strcmp(dot, ".png") == 0) {
+		return "image/png";
+	}
+
+	return "application/octet-stream";
+}
+
+static int
+serve_static_file(FILE *stream, const struct http_request *req,
+                  const struct server_config *cfg)
+{
+	char fullpath[PATH_MAX];
+	struct stat st;
+	int fd;
+	char *buf;
+	ssize_t nread;
+	size_t total = 0;
+
+	if (cfg->docroot == NULL) {
+		const char *body = "500 Internal Server Error\n";
+		craft_http_response(stream, HTTP_STATUS_INTERNAL_SERVER_ERROR,
+		                    "Internal Server Error", body, "text/plain", 0);
+		return -1;
+	}
+
+	/* Build full path: docroot + path */
+	if (snprintf(fullpath, sizeof(fullpath), "%s%s", cfg->docroot, req->path) >=
+	    (int)sizeof(fullpath)) {
+		const char *body = "414 Request-URI Too Long\n";
+		craft_http_response(stream, HTTP_STATUS_BAD_REQUEST, "Bad Request",
+		                    body, "text/plain", 0);
+		return -1;
+	}
+
+	if (stat(fullpath, &st) == -1) {
+		const char *body = "404 Not Found\n";
+		craft_http_response(stream, HTTP_STATUS_NOT_FOUND, "Not Found", body,
+		                    "text/plain", 0);
+		return -1;
+	}
+
+	/* If it's a directory, try index.html for now */
+	if (S_ISDIR(st.st_mode)) {
+		char indexpath[PATH_MAX];
+
+		if (snprintf(indexpath, sizeof(indexpath), "%s%s%s", cfg->docroot,
+		             req->path,
+		             (req->path[strlen(req->path) - 1] == '/') ? "" : "/") >=
+		    (int)sizeof(indexpath)) {
+			const char *body = "400 Bad Request\n";
+			craft_http_response(stream, HTTP_STATUS_BAD_REQUEST, "Bad Request",
+			                    body, "text/plain", 0);
+			return -1;
+		}
+
+		strncat(indexpath, "index.html",
+		        sizeof(indexpath) - strlen(indexpath) - 1);
+
+		if (stat(indexpath, &st) == -1 || !S_ISREG(st.st_mode)) {
+			const char *body = "403 Forbidden\n";
+			craft_http_response(stream, HTTP_STATUS_FORBIDDEN, "Forbidden",
+			                    body, "text/plain", 0);
+			return -1;
+		}
+
+		/* Use index.html instead */
+		strncpy(fullpath, indexpath, sizeof(fullpath));
+		fullpath[sizeof(fullpath) - 1] = '\0';
+	}
+
+	if (!S_ISREG(st.st_mode)) {
+		const char *body = "403 Forbidden\n";
+		craft_http_response(stream, HTTP_STATUS_FORBIDDEN, "Forbidden", body,
+		                    "text/plain", 0);
+		return -1;
+	}
+
+	fd = open(fullpath, O_RDONLY);
+	if (fd == -1) {
+		const char *body = "403 Forbidden\n";
+		craft_http_response(stream, HTTP_STATUS_FORBIDDEN, "Forbidden", body,
+		                    "text/plain", 0);
+		return -1;
+	}
+
+	/* Very simple: read whole file into memory */
+	buf = malloc(st.st_size + 1);
+	if (!buf) {
+		close(fd);
+		const char *body = "500 Internal Server Error\n";
+		craft_http_response(stream, HTTP_STATUS_INTERNAL_SERVER_ERROR,
+		                    "Internal Server Error", body, "text/plain", 0);
+		return -1;
+	}
+
+	while ((nread = read(fd, buf + total, st.st_size - total)) > 0) {
+		total += (size_t)nread;
+	}
+
+	close(fd);
+	buf[total] = '\0';
+
+	const char *ctype = guess_content_type(fullpath);
+	/* Note: craft_http_response uses strlen(body) for Content-Length,
+	   so this only works correctly for text files; that's fine for a first
+	   pass. */
+	craft_http_response(stream, HTTP_STATUS_OK, "OK", buf, ctype, 0);
+
+	free(buf);
+	return 0;
+}
+
 int
-handle_http_connection(FILE *stream)
+handle_http_connection(FILE *stream, const struct server_config *cfg)
 {
 	struct http_request req;
 	enum HTTP_PARSE_RESULT res;
@@ -164,7 +302,6 @@ handle_http_connection(FILE *stream)
 			break;
 
 		case HTTP_PARSE_INVALID_VERSION:
-			/* For now, treat bad/unsupported versions as 400. */
 			status = HTTP_STATUS_BAD_REQUEST;
 			text = "Bad Request";
 			body = "400 Bad Request\n";
@@ -180,16 +317,33 @@ handle_http_connection(FILE *stream)
 			break;
 		}
 
-		craft_http_response(stream, status, text, body, "text/plain",
-		                    0 /* is_head */);
+		craft_http_response(stream, status, text, body, "text/plain", 0);
 		return -1;
 	}
 
-	/* If we got here, parse_http_request validated method/URI/version. */
 	is_head = (strcmp(req.method, "HEAD") == 0);
 
-	/* For the snapshot: just send a simple 200 OK. */
-	craft_http_response(stream, HTTP_STATUS_OK, "OK", "OK\n", "text/plain",
-	                    is_head);
+	/* CGI: /cgi-bin/... and cgi_dir configured */
+	if (cfg && cfg->cgi_dir && strncmp(req.path, "/cgi-bin/", 9) == 0) {
+		fflush(stream); /* flush any buffered input/output */
+		int fd = fileno(stream);
+		if (fd == -1 || cgi_handle(fd, &req, cfg->cgi_dir) < 0) {
+			const char *body = "500 Internal Server Error\n";
+			craft_http_response(stream, HTTP_STATUS_INTERNAL_SERVER_ERROR,
+			                    "Internal Server Error", body, "text/plain",
+			                    is_head);
+			return -1;
+		}
+		return 0;
+	}
+
+	/* HEAD: we can still reuse serve_static_file, then ignore body later if
+	   needed. For now, we just serve normally; supporting HEAD fully is a later
+	   polish. */
+	if (serve_static_file(stream, &req, cfg) < 0) {
+		/* serve_static_file already sent an error */
+		return -1;
+	}
+
 	return 0;
 }
