@@ -5,6 +5,7 @@
 #include <ctype.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <regex.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -23,16 +24,217 @@ validate_method(const char *method)
 }
 
 int
+hexval(int c)
+{
+	if (c >= '0' && c <= '9') {
+		return c - '0';
+	}
+	if (c >= 'A' && c <= 'F') {
+		return c - 'A' + 10;
+	}
+	if (c >= 'a' && c <= 'f') {
+		return c - 'a' + 10;
+	}
+	return -1;
+}
+
+int
+normalize_path(const char *uri_path, char *out, size_t outsz)
+{
+	char tmp[4096];
+	size_t ti = 0;
+
+	// Percent-decode into tmp
+	for (size_t i = 0; uri_path[i] != '\0';) {
+		unsigned char c = (unsigned char)uri_path[i];
+
+		if (c == '%') {
+			int h1, h2;
+			if (!uri_path[i + 1] || !uri_path[i + 2]) {
+				return -1; // incomplete escape
+			}
+			h1 = hexval((unsigned char)uri_path[i + 1]);
+			h2 = hexval((unsigned char)uri_path[i + 2]);
+			if (h1 < 0 || h2 < 0) {
+				return -1; // invalid hex
+			}
+			c = (unsigned char)((h1 << 4) | h2);
+			i += 3;
+		} else {
+			i++;
+		}
+
+		if (ti + 1 >= sizeof(tmp)) {
+			return -1; // overflow
+		}
+		tmp[ti++] = (char)c;
+	}
+	tmp[ti] = '\0';
+
+	// Remove dot segments
+	size_t out_len = 0;
+
+	// Always work with a leading '/', since sws paths are rooted
+	const char *p = tmp;
+	if (*p != '/') {
+		// treat relative like rooted at '/'
+		if (out_len + 1 >= outsz) {
+			return -1;
+		}
+		out[out_len++] = '/';
+	} else {
+		// copy initial slash
+		if (out_len + 1 >= outsz) {
+			return -1;
+		}
+		out[out_len++] = *p++;
+	}
+
+	while (*p != '\0') {
+		// Skip repeated slashes
+		if (*p == '/') {
+			p++;
+			continue;
+		}
+
+		// Find next segment [p, q)
+		const char *seg_start = p;
+		while (*p != '\0' && *p != '/') {
+			p++;
+		}
+		const char *seg_end = p;
+		size_t seg_len = (size_t)(seg_end - seg_start);
+
+		// Segment content decisions: ".", "..", or normal
+		if (seg_len == 1 && seg_start[0] == '.') {
+			// "." -> skip
+			continue;
+		}
+		if (seg_len == 2 && seg_start[0] == '.' && seg_start[1] == '.') {
+			// ".." -> pop last segment, but not leading '/'
+			// Remove trailing slash if present
+			if (out_len > 1) {
+				// drop trailing slash if any
+				if (out[out_len - 1] == '/') {
+					out_len--;
+				}
+
+				// walk back to previous '/'
+				while (out_len > 1 && out[out_len - 1] != '/') {
+					out_len--;
+				}
+
+				// if we ended up at '/', we effectively popped a segment
+			} else {
+				// would escape above root
+				return -1;
+			}
+			continue;
+		}
+
+		// Normal segment: append "/" if needed, then segment
+		if (out_len == 0 || out[out_len - 1] != '/') {
+			if (out_len + 1 >= outsz) {
+				return -1;
+			}
+			out[out_len++] = '/';
+		}
+
+		if (out_len + seg_len >= outsz) {
+			return -1;
+		}
+		memcpy(out + out_len, seg_start, seg_len);
+		out_len += seg_len;
+	}
+
+	// Special case: if result is empty, use "/"
+	if (out_len == 0) {
+		if (outsz < 2) {
+			return -1;
+		}
+		out[0] = '/';
+		out[1] = '\0';
+	} else {
+		out[out_len] = '\0';
+	}
+
+	return 0;
+}
+
+int
 validate_uri(const char *uri)
 {
-	if (uri[0] != '/') {
+	// URI can consist of reserved and unreserved characters
+	// Reserved characters: ; / ? : @ & = +
+	// Unreserved characters: ALPHA | DIGIT | safe | extra | national
+	// safe: $ - _ .
+	// extra: ! * ' ( ) ,
+	// national: any OCTET excluding ALPHA, DIGIT, reserved, extra, safe, and
+	// unsafe
+	// unsafe: CTL (0x00-0x1F, 0x7F) | SP (0x20) | " # % < >
+
+	size_t len = strlen(uri);
+
+	if (len == 0) {
 		return -1;
 	}
 
-	if (strstr(uri, "..") != NULL) {
+	// This is reserved | extra | safe | ALPHA | DIGIT
+	const char okay_chars[] = ";/?@: &+=!*'(),$-_."
+							  "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+							  "abcdefghijklmnopqrstuvwxyz"
+							  "0123456789";
+
+	regex_t national_regex;
+	regex_t unsafe_regex;
+	int rc;
+
+	// unsafe = CTL (0x00-0x1F, 0x7F) | SP (0x20) | " # % < >
+	rc = regcomp(&unsafe_regex, "^[\000-\037\040\177\"#%<>]$", REG_EXTENDED);
+	if (rc != 0) {
 		return -1;
 	}
 
+	// national = any OCTET excluding ALPHA, DIGIT, reserved, extra, safe,
+	// unsafe
+	rc = regcomp(&national_regex,
+	             "^[^A-Za-z0-9;/?@: &+=!*'(),$-_.\000-\037\040\177\"#%<>]$",
+	             REG_EXTENDED);
+	if (rc != 0) {
+		regfree(&unsafe_regex);
+		return -1;
+	}
+
+	// Validate each character in the URI
+	for (size_t i = 0; i < len; i++) {
+		char c = uri[i];
+		char s[2] = {c, '\0'};
+
+		// reserved, extra, safe, ALPHA, DIGIT
+		if (strchr(okay_chars, c) != NULL) {
+			continue;
+		}
+
+		// If it's national, it is allowed unreserved
+		if (regexec(&national_regex, s, 0, NULL, 0) == 0) {
+			continue;
+		}
+
+		// If it's unsafe, the URI is invalid
+		if (regexec(&unsafe_regex, s, 0, NULL, 0) == 0) {
+			regfree(&unsafe_regex);
+			regfree(&national_regex);
+			return -1;
+		}
+
+		// Everything else is invalid
+		regfree(&unsafe_regex);
+		regfree(&national_regex);
+		return -1;
+	}
+
+	regfree(&unsafe_regex);
+	regfree(&national_regex);
 	return 0;
 }
 
@@ -69,17 +271,54 @@ parse_request_line(char *line, char *method, size_t method_sz, char *path,
 {
 	char *p = line;
 
-	char *m = strtok(p, " \t\r\n");
-	char *u = strtok(NULL, " \t\r\n");
-	char *v = strtok(NULL, " \t\r\n");
-	if (!m || !u || !v) {
+	/*
+	> >         char *m = strtok(p, " \t\r\n");
+	>
+	> I don't think that's right.  Your request line can't
+	> contain either \r nor \n anywhere except at the end of
+	> the line (and in fact MUST have both there); I don't
+	> know whether the RFC allows tabs as a separator
+	> between method, uri, and version, so check that as
+	> well.
+	*/
+
+	// char *m = strtok(p, " \t\r\n");
+	// char *u = strtok(NULL, " \t\r\n");
+	// char *v = strtok(NULL, " \t\r\n");
+	// if (!m || !u || !v) {
+	// 	return -1;
+	// }
+	// strncpy(method, m, method_sz - 1);
+	// method[method_sz - 1] = '\0';
+	// strncpy(path, u, path_sz - 1);
+	// path[path_sz - 1] = '\0';
+	// strncpy(version, v, version_sz - 1);
+	// version[version_sz - 1] = '\0';
+	// return 0;
+
+	// request line cant contain \r or \n except at end (which must have both)
+	char *sp1 = strchr(p, ' ');
+	if (!sp1) {
 		return -1;
 	}
-	strncpy(method, m, method_sz - 1);
+	*sp1 = '\0';
+	strncpy(method, p, method_sz - 1);
 	method[method_sz - 1] = '\0';
-	strncpy(path, u, path_sz - 1);
+	p = sp1 + 1;
+	char *sp2 = strchr(p, ' ');
+	if (!sp2) {
+		return -1;
+	}
+	*sp2 = '\0';
+	strncpy(path, p, path_sz - 1);
 	path[path_sz - 1] = '\0';
-	strncpy(version, v, version_sz - 1);
+	p = sp2 + 1;
+	char *crlf = strstr(p, "\r\n");
+	if (!crlf) {
+		return -1;
+	}
+	*crlf = '\0';
+	strncpy(version, p, version_sz - 1);
 	version[version_sz - 1] = '\0';
 	return 0;
 }
@@ -87,6 +326,12 @@ parse_request_line(char *line, char *method, size_t method_sz, char *path,
 enum HTTP_PARSE_RESULT
 parse_http_request(FILE *stream, struct http_request *request)
 {
+	/*
+	> >         char line[2048];
+	>
+	> You need to justify the line length.  The RFC may have
+	> a limit for that.
+	*/
 	char line[2048];
 	memset(request, 0, sizeof(*request));
 
@@ -152,6 +397,9 @@ craft_http_response(FILE *stream, enum HTTP_STATUS_CODE status_code,
 static const char *
 guess_content_type(const char *path)
 {
+	/*
+	    This has to change to use magic(5)
+	*/
 	const char *dot = strrchr(path, '.');
 	if (!dot) {
 		return "text/plain";
@@ -324,6 +572,14 @@ handle_http_connection(FILE *stream, const struct server_config *cfg)
 	is_head = (strcmp(req.method, "HEAD") == 0);
 
 	/* CGI: /cgi-bin/... and cgi_dir configured */
+	char norm[PATH_MAX];
+	if (normalize_path(req.path, norm, sizeof(norm)) < 0) {
+		const char *body = "400 Bad Request\n";
+		craft_http_response(stream, HTTP_STATUS_BAD_REQUEST, "Bad Request",
+		                    body, "text/plain", is_head);
+		return -1;
+	}
+
 	if (cfg && cfg->cgi_dir && strncmp(req.path, "/cgi-bin/", 9) == 0) {
 		fflush(stream); /* flush any buffered input/output */
 		int fd = fileno(stream);
@@ -338,8 +594,8 @@ handle_http_connection(FILE *stream, const struct server_config *cfg)
 	}
 
 	/* HEAD: we can still reuse serve_static_file, then ignore body later if
-	   needed. For now, we just serve normally; supporting HEAD fully is a later
-	   polish. */
+	   needed. For now, we just serve normally; supporting HEAD fully is a
+	   later polish. */
 	if (serve_static_file(stream, &req, cfg) < 0) {
 		/* serve_static_file already sent an error */
 		return -1;

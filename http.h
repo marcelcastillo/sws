@@ -50,6 +50,19 @@ enum HTTP_STATUS_CODE {
 int validate_method(const char *method);
 
 /*
+ * Converts a hexadecimal character to its integer value.
+ * Returns -1 on invalid character.
+ */
+int hexval(int c);
+
+/*
+ * Normalizes the URI path by decoding percent-encoded characters.
+ * Writes the normalized path to 'out' buffer of size 'outsz'.
+ * Returns -1 on failure, 0 on success.
+ */
+int normalize_path(const char *uri_path, char *out, size_t outsz);
+
+/*
  * Validates the URI.
  * Returns -1 on invalid URI, 0 on success.
  */
@@ -81,7 +94,6 @@ int parse_request_line(char *line, char *method, size_t method_sz, char *path,
  */
 enum HTTP_PARSE_RESULT parse_http_request(FILE *stream,
                                           struct http_request *request);
-
 /*
  * Crafts and writes an HTTP response to the given stream.
  * If is_head is non-zero, the body will not be included in the response.
