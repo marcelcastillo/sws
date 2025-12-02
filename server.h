@@ -4,6 +4,8 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 
+#include <stdio.h>
+
 struct server_config {
 
 	char *cgi_dir;
@@ -14,6 +16,8 @@ struct server_config {
 	int have_bind_address;
 
 	char *logfile;
+    FILE *logfp;
+
 	int port;
 
 	char *docroot;
