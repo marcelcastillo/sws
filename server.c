@@ -21,6 +21,33 @@
 
 #define SLEEP 5
 
+void
+logRequest(struct server_config *config, const char *clientIP,
+           struct http_request *req, struct http_response *resp)
+{
+	time_t now = time(NULL);
+	struct tm gmt;
+	gmtime_r(&now, &gmt);
+
+	char timebuf[64];
+	strftime(timebuf, sizeof(timebuf), "%Y-%m-%dT%H:%M:%SZ", &gmt);
+
+	char logbuf[4096];
+	snprintf(logbuf, sizeof(logbuf), "%s %s \"%s %s %s\" %d %zu", clientIP,
+	         timebuf, req->method, req->path, req->version, resp->status_code,
+	         resp->content_len);
+
+	if (config->debug_mode) {
+		printf("%s\n", logbuf);
+	} else {
+		FILE *fp = config->logfp;
+		if (fp) {
+			fprintf(fp, "%s\n", logbuf);
+			fflush(fp);
+		}
+	}
+}
+
 int
 createSocket(struct server_config *config)
 {
@@ -99,7 +126,8 @@ handleConnection(int fd, struct sockaddr_storage client,
 	int res;
 	const char *rip;
 	char addrbuf[INET6_ADDRSTRLEN];
-
+	struct http_request req;
+	struct http_response resp;
 
 	/* Convert client address to string */
 	if (client.ss_family == AF_INET) {
@@ -123,10 +151,14 @@ handleConnection(int fd, struct sockaddr_storage client,
 		exit(EXIT_FAILURE);
 	}
 
-	if ((res = handle_http_connection(stream, config)) < 0) {
+	if ((res = handle_http_connection(stream, config, &req, &resp)) < 0) {
 		if (config->debug_mode) {
 			printf("Bad request\n");
 		}
+	}
+
+	if (config->logfile != NULL) {
+		logRequest(config, rip, &req, &resp);
 	}
 
 	fclose(stream);
@@ -172,6 +204,7 @@ handleSocket(int server_sock, struct server_config *config)
 	return;
 }
 
+/* Signal handler that reaps children */
 void
 reap(int sig)
 {
@@ -191,6 +224,16 @@ runServer(struct server_config *config)
 	}
 
 	server_sock = createSocket(config);
+
+	/* Log file */
+	if (config->logfile && !config->debug_mode) {
+		if ((config->logfp = fopen(config->logfile, "a")) == NULL) {
+			perror("fopen log file");
+			exit(EXIT_FAILURE);
+		}
+	} else if (config->debug_mode) {
+		config->logfp = stdout;
+	}
 
 	/* In debug mode... */
 	if (config->debug_mode) {
