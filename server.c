@@ -157,9 +157,9 @@ handleConnection(int fd, struct sockaddr_storage client,
 		}
 	}
 
-	if (config->logfile != NULL) {
-		logRequest(config, rip, &req, &resp);
-	}
+
+	logRequest(config, rip, &req, &resp);
+
 
 	fclose(stream);
 	exit(EXIT_SUCCESS);
