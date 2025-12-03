@@ -164,85 +164,54 @@ normalize_path(const char *uri_path, char *out, size_t outsz)
 int
 validate_uri(const char *uri)
 {
-	// URI can consist of reserved and unreserved characters
-	// Reserved characters: ; / ? : @ & = +
-	// Unreserved characters: ALPHA | DIGIT | safe | extra | national
-	// safe: $ - _ .
-	// extra: ! * ' ( ) ,
-	// national: any OCTET excluding ALPHA, DIGIT, reserved, extra, safe, and
-	// unsafe
-	// unsafe: CTL (0x00-0x1F, 0x7F) | SP (0x20) | " # % < >
+	size_t len;
+	const char *p;
 
-	size_t len = strlen(uri);
-
-	if (len == 0) {
+	if (uri == NULL) {
 		return -1;
 	}
 
-	// This is reserved | extra | safe | ALPHA | DIGIT
-	const char okay_chars[] = ";/?@: &+=!*'(),$-_."
-							  "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-							  "abcdefghijklmnopqrstuvwxyz"
-							  "0123456789";
-
-	regex_t national_regex;
-	regex_t unsafe_regex;
-	int rc;
-
-	// unsafe = CTL (0x00-0x1F, 0x7F) | SP (0x20) | " # % < >
-	rc = regcomp(&unsafe_regex, "^[\000-\037\040\177\"#%<>]$", REG_EXTENDED);
-	if (rc != 0) {
+	/* Must be non-empty and start with '/' */
+	if (uri[0] == '\0' || uri[0] != '/') {
 		return -1;
 	}
 
-	// national = any OCTET excluding ALPHA, DIGIT, reserved, extra, safe,
-	// unsafe
-	rc = regcomp(&national_regex,
-	             "^[^A-Za-z0-9;/?@: &+=!*'(),$-_.\000-\037\040\177\"#%<>]$",
-	             REG_EXTENDED);
-	if (rc != 0) {
-		regfree(&unsafe_regex);
+	len = strlen(uri);
+
+	/* Optional: length check */
+	if (len >= MAX_URI) {
 		return -1;
 	}
 
-	// Validate each character in the URI
-	for (size_t i = 0; i < len; i++) {
-		char c = uri[i];
-		char s[2] = {c, '\0'};
+	/*
+	 * Prevent directory traversal: reject URIs that contain
+	 * "/../" or end with "/.." or start with "../".
+	 */
+	p = uri;
+	while ((p = strstr(p, "..")) != NULL) {
+		int at_start = (p == uri);
+		int preceded_by_slash = (p > uri && p[-1] == '/');
+		int followed_by_slash = (p[2] == '/');
+		int ends_here = (p[2] == '\0');
 
-		// reserved, extra, safe, ALPHA, DIGIT
-		if (strchr(okay_chars, c) != NULL) {
-			continue;
-		}
-
-		// If it's national, it is allowed unreserved
-		if (regexec(&national_regex, s, 0, NULL, 0) == 0) {
-			continue;
-		}
-
-		// If it's unsafe, the URI is invalid
-		if (regexec(&unsafe_regex, s, 0, NULL, 0) == 0) {
-			regfree(&unsafe_regex);
-			regfree(&national_regex);
+		if ((at_start && (followed_by_slash || ends_here)) ||
+		    (preceded_by_slash && (followed_by_slash || ends_here))) {
 			return -1;
 		}
-
-		// Everything else is invalid
-		regfree(&unsafe_regex);
-		regfree(&national_regex);
-		return -1;
+		p += 2;
 	}
 
-	regfree(&unsafe_regex);
-	regfree(&national_regex);
+	/* For this project we don't need to micro-validate every char.
+	 * If it starts with '/', is not too long, and doesn't try to
+	 * traverse "..", we accept it.
+	 */
 	return 0;
 }
 
 int
 validate_version(const char *version)
 {
-    if (strcmp(version, "HTTP/1.0") == 0 ||
-        strcmp(version, "HTTP/1.1") == 0) {
+	if (strcmp(version, "HTTP/1.0") == 0 || strcmp(version, "HTTP/1.1") == 0) {
 		return 0;
 	}
 	return -1;
@@ -339,10 +308,10 @@ parse_http_request(FILE *stream, struct http_request *request)
 	if (fgets(line, sizeof(line), stream) == NULL) {
 		return HTTP_PARSE_EOF;
 	}
-    
-    /* Store the original request in the http_request struct for logging */
-    strncpy(request->request_line, line, sizeof(request->request_line)-1);
-    request->request_line[sizeof(request->request_line)-1] = '\0';
+
+	/* Store the original request in the http_request struct for logging */
+	strncpy(request->request_line, line, sizeof(request->request_line) - 1);
+	request->request_line[sizeof(request->request_line) - 1] = '\0';
 
 	if (parse_request_line(line, request->method, MAX_METHOD, request->path,
 	                       MAX_URI, request->version, MAX_VERSION) != 0) {
@@ -386,23 +355,24 @@ craft_http_response(FILE *stream, enum HTTP_STATUS_CODE status_code,
 	gmtime_r(&now, &gmt);
 	char date_buf[64];
 	strftime(date_buf, sizeof(date_buf), "%a, %d %b %Y %H:%M:%S GMT", &gmt);
+	size_t len = body ? strlen(body) : 0;
 
 	fprintf(stream, "HTTP/1.0 %d %s\r\n", status_code, status_text);
 	fprintf(stream, "Date: %s\r\n", date_buf);
 	fprintf(stream, "Server: sws/1.0\r\n");
-	fprintf(stream, "Content-Length: %zu\r\n", strlen(body));
+	fprintf(stream, "Content-Length: %zu\r\n", len);
 	fprintf(stream, "Content-Type: %s\r\n",
 	        content_type ? content_type : "text/plain");
 	fprintf(stream, "\r\n");
 	if (!is_head && body) {
 		fprintf(stream, "%s", body);
 	}
-    
-    /* Add to the resp struct */
-    if (resp) {
-        resp->status_code = status_code;
-        resp->content_len = strlen(body);
-    }
+
+	/* Add to the resp struct */
+	if (resp) {
+		resp->status_code = status_code;
+		resp->content_len = len;
+	}
 
 	return 0;
 }
@@ -436,7 +406,7 @@ guess_content_type(const char *path)
 
 static int
 serve_static_file(FILE *stream, const struct http_request *req,
-                  const struct server_config *cfg, 
+                  const struct server_config *cfg, int is_head,
                   struct http_response *resp)
 {
 	char fullpath[PATH_MAX];
@@ -449,7 +419,8 @@ serve_static_file(FILE *stream, const struct http_request *req,
 	if (cfg->docroot == NULL) {
 		const char *body = "500 Internal Server Error\n";
 		craft_http_response(stream, HTTP_STATUS_INTERNAL_SERVER_ERROR,
-		                    "Internal Server Error", body, "text/plain", 0, resp);
+		                    "Internal Server Error", body, "text/plain", 0,
+		                    resp);
 		return -1;
 	}
 
@@ -519,7 +490,8 @@ serve_static_file(FILE *stream, const struct http_request *req,
 		close(fd);
 		const char *body = "500 Internal Server Error\n";
 		craft_http_response(stream, HTTP_STATUS_INTERNAL_SERVER_ERROR,
-		                    "Internal Server Error", body, "text/plain", 0, resp);
+		                    "Internal Server Error", body, "text/plain", 0,
+		                    resp);
 		return -1;
 	}
 
@@ -534,8 +506,8 @@ serve_static_file(FILE *stream, const struct http_request *req,
 	/* Note: craft_http_response uses strlen(body) for Content-Length,
 	   so this only works correctly for text files; that's fine for a first
 	   pass. */
-	craft_http_response(stream, HTTP_STATUS_OK, "OK", buf, ctype, 0, resp);
-
+	craft_http_response(stream, HTTP_STATUS_OK, "OK", buf, ctype, is_head,
+	                    resp);
 	free(buf);
 	return 0;
 }
@@ -548,7 +520,7 @@ handle_http_connection(FILE *stream, const struct server_config *cfg,
 	int is_head = 0;
 
 	memset(req, 0, sizeof(*req));
-    memset(resp, 0, sizeof(*resp));
+	memset(resp, 0, sizeof(*resp));
 
 	res = parse_http_request(stream, req);
 
@@ -595,6 +567,10 @@ handle_http_connection(FILE *stream, const struct server_config *cfg,
 		return -1;
 	}
 
+	/* Use normalized path from here on */
+	strncpy(req->path, norm, sizeof(req->path));
+	req->path[sizeof(req->path) - 1] = '\0';
+
 	if (cfg && cfg->cgi_dir && strncmp(req->path, "/cgi-bin/", 9) == 0) {
 		fflush(stream); /* flush any buffered input/output */
 		int fd = fileno(stream);
@@ -609,9 +585,8 @@ handle_http_connection(FILE *stream, const struct server_config *cfg,
 	}
 
 	/* HEAD: we can still reuse serve_static_file, then ignore body later if
-	   needed. For now, we just serve normally; supporting HEAD fully is a
-	   later polish. */
-	if (serve_static_file(stream, req, cfg, resp) < 0) {
+	   needed. */
+	if (serve_static_file(stream, req, cfg, is_head, resp) < 0) {
 		/* serve_static_file already sent an error */
 		return -1;
 	}
