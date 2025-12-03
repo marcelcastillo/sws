@@ -1,3 +1,5 @@
 sws
 *.o
 sws-directories/
+test.sh
+script.sh
