@@ -390,7 +390,7 @@ guess_content_type(const char *path)
             return "application/octet-stream";
         }
 
-#if defined(__sun) || defined(__illumos)
+#if __sun
         /* OmniOS */
         if (magic_load(ms, "/opt/magic/share/misc/magic.mgc") != 0) {
             magic_close(ms);
