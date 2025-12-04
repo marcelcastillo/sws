@@ -226,7 +226,7 @@ runServer(struct server_config *config)
 
 	server_sock = createSocket(config);
 
-	/* Log file */
+	/* Logging */
 	if (config->logfile && !config->debug_mode) {
 		if ((config->logfp = fopen(config->logfile, "a")) == NULL) {
 			perror("fopen log file");
@@ -244,7 +244,14 @@ runServer(struct server_config *config)
 		return;
 	}
 
-	/* In normal mode */
+	/* In normal mode... Daemonize. Don't change root */
+    if (!config->debug_mode){
+        if (daemon(1, 0) < 0){
+            perror("daemon");
+            exit(EXIT_FAILURE);
+        }
+    }
+
 	for (;;) {
 		fd_set ready;
 		struct timeval timeout;
