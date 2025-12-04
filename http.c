@@ -432,7 +432,7 @@ serve_static_file(FILE *stream, const struct http_request *req,
 		                    body, "text/plain", 0, resp);
 		return -1;
 	}
-
+   
 	if (stat(fullpath, &st) == -1) {
 		const char *body = "404 Not Found\n";
 		craft_http_response(stream, HTTP_STATUS_NOT_FOUND, "Not Found", body,
