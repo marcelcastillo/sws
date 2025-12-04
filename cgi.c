@@ -11,6 +11,7 @@
 static int
 cgi_build_script_path(const struct http_request *req, const char *cgi_dir,
                       char *script_path, size_t script_path_len,
+                      char *script_name, size_t script_name_len,
                       const char **query_string_out)
 {
 	const char prefix[] = "/cgi-bin/";
@@ -45,6 +46,13 @@ cgi_build_script_path(const struct http_request *req, const char *cgi_dir,
 		*query_string_out = "";
 	}
 
+	/* SCRIPT_NAME should be /cgi-bin/<script_rel> without query string */
+	if (snprintf(script_name, script_name_len, "/cgi-bin/%s", script_rel) >=
+	    (int)script_name_len) {
+		return -1;
+	}
+
+	/* Full filesystem path to the CGI script */
 	if (snprintf(script_path, script_path_len, "%s/%s", cgi_dir, script_rel) >=
 	    (int)script_path_len) {
 		return -1;
@@ -57,11 +65,13 @@ int
 cgi_handle(int client_fd, const struct http_request *req, const char *cgi_dir)
 {
 	char script_path[PATH_MAX];
+	char script_name[PATH_MAX];
 	const char *query_string;
 	pid_t pid;
 	int status;
 
 	if (cgi_build_script_path(req, cgi_dir, script_path, sizeof(script_path),
+	                          script_name, sizeof(script_name),
 	                          &query_string) < 0) {
 		/* Not a CGI URI or bad mapping */
 		return -1;
@@ -91,7 +101,15 @@ cgi_handle(int client_fd, const struct http_request *req, const char *cgi_dir)
 			_exit(1);
 		}
 
-		/* TODO LEFT: SCRIPT_NAME, REMOTE_ADDR, etc. */
+		/* New CGI-ish variables */
+		if (setenv("SCRIPT_NAME", script_name, 1) == -1) {
+			_exit(1);
+		}
+		if (setenv("GATEWAY_INTERFACE", "CGI/1.1", 1) == -1) {
+			_exit(1);
+		}
+
+		/* REMOTE_ADDR will be set in server.c per connection */
 
 		if (dup2(client_fd, STDOUT_FILENO) == -1) {
 			_exit(1);

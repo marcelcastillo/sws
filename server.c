@@ -12,8 +12,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 #include <time.h>
+#include <unistd.h>
 
 #include "http.h"
 
@@ -145,6 +145,24 @@ handleConnection(int fd, struct sockaddr_storage client,
 		printf("Client connected from %s\n", rip);
 	}
 
+	if (setenv("REMOTE_ADDR", rip, 1) == -1) {
+		/* ignore */
+	}
+
+	{
+		char portbuf[16];
+		snprintf(portbuf, sizeof(portbuf), "%d", ntohs(config->port));
+		setenv("SERVER_PORT", portbuf, 1);
+	}
+
+	{
+		char hostbuf[256];
+		if (gethostname(hostbuf, sizeof(hostbuf)) == 0) {
+			hostbuf[sizeof(hostbuf) - 1] = '\0';
+			setenv("SERVER_NAME", hostbuf, 1);
+		}
+	}
+
 	FILE *stream = fdopen(fd, "r+");
 	if (stream == NULL) {
 		perror("fdopen");
@@ -245,12 +263,12 @@ runServer(struct server_config *config)
 	}
 
 	/* In normal mode... Daemonize. Don't change root */
-    if (!config->debug_mode){
-        if (daemon(1, 0) < 0){
-            perror("daemon");
-            exit(EXIT_FAILURE);
-        }
-    }
+	if (!config->debug_mode) {
+		if (daemon(1, 0) < 0) {
+			perror("daemon");
+			exit(EXIT_FAILURE);
+		}
+	}
 
 	for (;;) {
 		fd_set ready;
