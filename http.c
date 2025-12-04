@@ -531,7 +531,7 @@ serve_static_file(FILE *stream, const struct http_request *req,
 		                    body, "text/plain", NULL, is_head, resp);
 		return -1;
 	}
-   
+
 	if (stat(fullpath, &st) == -1) {
 		const char *body = "404 Not Found\n";
 		craft_http_response(stream, HTTP_STATUS_NOT_FOUND, "Not Found", body,
@@ -819,13 +819,21 @@ handle_http_connection(FILE *stream, const struct server_config *cfg,
 	if (cfg && cfg->cgi_dir && strncmp(req->path, "/cgi-bin/", 9) == 0) {
 		fflush(stream); /* flush any buffered input/output */
 		int fd = fileno(stream);
-		if (fd == -1 || cgi_handle(fd, req, cfg->cgi_dir) < 0) {
+		if (fd == -1) {
+			/* We can't talk to the client at all -> send 500 */
 			const char *body = "500 Internal Server Error\n";
 			craft_http_response(stream, HTTP_STATUS_INTERNAL_SERVER_ERROR,
 			                    "Internal Server Error", body, "text/plain",
 			                    NULL, is_head, resp);
 			return -1;
 		}
+
+		/* Let the CGI script generate the entire response.
+		 * Ignore its return value; it writes directly to fd.
+		 */
+		(void)cgi_handle(fd, req, cfg->cgi_dir);
+
+		/* We didn’t craft an HTTP response, so leave resp as-is (zeros). */
 		return 0;
 	}
 
