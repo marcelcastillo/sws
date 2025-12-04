@@ -10,6 +10,7 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <magic.h>
 
 #include "cgi.h"
 #include "server.h"
@@ -380,29 +381,40 @@ craft_http_response(FILE *stream, enum HTTP_STATUS_CODE status_code,
 static const char *
 guess_content_type(const char *path)
 {
-	/*
-	    This has to change to use magic(5)
-	*/
-	const char *dot = strrchr(path, '.');
-	if (!dot) {
-		return "text/plain";
-	}
+    static struct magic_set *ms = NULL;
+    const char *mime;
 
-	if (strcmp(dot, ".html") == 0 || strcmp(dot, ".htm") == 0) {
-		return "text/html";
-	}
-	if (strcmp(dot, ".txt") == 0) {
-		return "text/plain";
-	}
-	if (strcmp(dot, ".jpg") == 0 || strcmp(dot, ".jpeg") == 0) {
-		return "image/jpeg";
-	}
-	if (strcmp(dot, ".png") == 0) {
-		return "image/png";
-	}
+    if (ms == NULL) {
+        ms = magic_open(MAGIC_MIME_TYPE | MAGIC_ERROR);
+        if (ms == NULL) {
+            return "application/octet-stream";
+        }
 
-	return "application/octet-stream";
+#if defined(__sun) || defined(__illumos)
+        /* OmniOS */
+        if (magic_load(ms, "/opt/magic/share/misc/magic.mgc") != 0) {
+            magic_close(ms);
+            ms = NULL;
+            return "application/octet-stream";
+        }
+#else
+        /* Linux/NetBSD */
+        if (magic_load(ms, NULL) != 0) {
+            magic_close(ms);
+            ms = NULL;
+            return "application/octet-stream";
+        }
+#endif
+    }
+
+    mime = magic_file(ms, path);
+    if (mime == NULL) {
+        return "application/octet-stream";
+    }
+
+    return mime;
 }
+
 
 static int
 serve_static_file(FILE *stream, const struct http_request *req,
