@@ -3,3 +3,9 @@ sws
 sws-directories/
 test.sh
 script.sh
+file
+make-swsdirs
+out.txt
+test-sws.sh
+docroot/
+index.html

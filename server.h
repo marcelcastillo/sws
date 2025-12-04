@@ -16,7 +16,7 @@ struct server_config {
 	int have_bind_address;
 
 	char *logfile;
-    FILE *logfp;
+	FILE *logfp;
 
 	int port;
 
