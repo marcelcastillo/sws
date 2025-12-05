@@ -818,24 +818,18 @@ handle_http_connection(FILE *stream, const struct server_config *cfg,
 
 	if (cfg && cfg->cgi_dir && strncmp(req->path, "/cgi-bin/", 9) == 0) {
 		fflush(stream); /* flush any buffered input/output */
-		int fd = fileno(stream);
-		if (fd == -1) {
-			/* We can't talk to the client at all -> send 500 */
+
+		if (cgi_handle(stream, req, cfg->cgi_dir, is_head, resp) < 0) {
 			const char *body = "500 Internal Server Error\n";
 			craft_http_response(stream, HTTP_STATUS_INTERNAL_SERVER_ERROR,
 			                    "Internal Server Error", body, "text/plain",
 			                    NULL, is_head, resp);
 			return -1;
 		}
-
-		/* Let the CGI script generate the entire response.
-		 * Ignore its return value; it writes directly to fd.
-		 */
-		(void)cgi_handle(fd, req, cfg->cgi_dir);
-
-		/* We didn’t craft an HTTP response, so leave resp as-is (zeros). */
+		/* cgi_handle already sent a full HTTP response and filled resp */
 		return 0;
 	}
+
 
 	/* HEAD: we can still reuse serve_static_file, then ignore body later if
 	   needed. */
