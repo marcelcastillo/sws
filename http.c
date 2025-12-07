@@ -603,6 +603,10 @@ handle_http_connection(FILE *stream, const struct server_config *cfg,
 
 	res = parse_http_request(stream, req);
 
+#ifdef __sun
+	fseek(stream, 0, SEEK_SET);
+#endif
+
 	if (res != HTTP_PARSE_OK)
 	{
 		enum HTTP_STATUS_CODE status;
