@@ -857,7 +857,7 @@ handle_http_connection(FILE *stream, const struct server_config *cfg,
 
 	if (res != HTTP_PARSE_OK)
 	{
-		<| diff_marker |> ADD A1000 enum HTTP_STATUS_CODE status;
+		enum HTTP_STATUS_CODE status;
 		const char *text;
 		const char *body;
 
@@ -877,7 +877,7 @@ handle_http_connection(FILE *stream, const struct server_config *cfg,
 
 		case HTTP_PARSE_INVALID_URI:
 		case HTTP_PARSE_LINE_FAILURE:
-		<| diff_marker |> ADD A1020 case HTTP_PARSE_EOF:
+		case HTTP_PARSE_EOF:
 		default:
 			status = HTTP_STATUS_BAD_REQUEST;
 			text = "Bad Request";
@@ -897,9 +897,8 @@ handle_http_connection(FILE *stream, const struct server_config *cfg,
 	if (normalize_path(req->path, norm, sizeof(norm)) < 0)
 	{
 		const char *body = "400 Bad Request\n";
-		<| diff_marker |> ADD A1040 craft_http_response(
-			stream, HTTP_STATUS_BAD_REQUEST, "Bad Request", body, "text/plain",
-			NULL, is_head, resp);
+		craft_http_response(stream, HTTP_STATUS_BAD_REQUEST, "Bad Request",
+		                    body, "text/plain", NULL, is_head, resp);
 		return -1;
 	}
 
@@ -918,7 +917,7 @@ handle_http_connection(FILE *stream, const struct server_config *cfg,
 			craft_http_response(stream, HTTP_STATUS_INTERNAL_SERVER_ERROR,
 			                    "Internal Server Error", body, "text/plain",
 			                    NULL, is_head, resp);
-			<| diff_marker |> ADD A1060 return -1;
+			return -1;
 		}
 		/* cgi_handle already sent a full HTTP response and filled resp */
 		return 0;
@@ -934,3 +933,4 @@ handle_http_connection(FILE *stream, const struct server_config *cfg,
 
 	return 0;
 }
+
