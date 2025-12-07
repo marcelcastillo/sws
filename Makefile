@@ -6,7 +6,7 @@ CFLAGS  = -Wall -Werror -Wextra -g
 LDFLAGS = -lmagic
 
 OMNIOS_CFLAGS  = -I/opt/magic/include
-OMNIOS_LDFLAGS = -L/opt/magic/lib -R/opt/magic/lib -libsocket -lnsl
+OMNIOS_LDFLAGS = -L/opt/magic/lib -R/opt/magic/lib -lsocket -lnsl
 
 all: $(PROG)
 
