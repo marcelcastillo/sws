@@ -306,7 +306,8 @@ parse_request_line(char *line, char *method, size_t method_sz, char *path,
 {
 	char *p = line;
 
-	/* Request line can't contain \r or \n except at end (which must have both) */
+	/* Request line can't contain \r or \n except at end (which must have both)
+	 */
 	char *sp1 = strchr(p, ' ');
 	if (!sp1)
 	{
@@ -670,19 +671,16 @@ serve_static_file(FILE *stream, const struct http_request *req,
 				{
 					size_t newcap = cap ? cap * 2 : 16;
 					struct dir_entry *tmp =
-					    realloc(entries, newcap * sizeof(*entries));
+						realloc(entries, newcap * sizeof(*entries));
 					if (!tmp)
 					{
 						closedir(dir);
 						free(entries);
-						const char *body =
-						    "500 Internal Server Error\n";
-						craft_http_response(
-						    stream,
-						    HTTP_STATUS_INTERNAL_SERVER_ERROR,
-						    "Internal Server Error", body,
-						    "text/plain", NULL, is_head,
-						    resp);
+						const char *body = "500 Internal Server Error\n";
+						craft_http_response(stream,
+						                    HTTP_STATUS_INTERNAL_SERVER_ERROR,
+						                    "Internal Server Error", body,
+						                    "text/plain", NULL, is_head, resp);
 						return -1;
 					}
 					entries = tmp;
@@ -698,12 +696,11 @@ serve_static_file(FILE *stream, const struct http_request *req,
 						free(entries[i].name);
 					}
 					free(entries);
-					const char *body =
-					    "500 Internal Server Error\n";
-					craft_http_response(
-					    stream, HTTP_STATUS_INTERNAL_SERVER_ERROR,
-					    "Internal Server Error", body,
-					    "text/plain", NULL, is_head, resp);
+					const char *body = "500 Internal Server Error\n";
+					craft_http_response(stream,
+					                    HTTP_STATUS_INTERNAL_SERVER_ERROR,
+					                    "Internal Server Error", body,
+					                    "text/plain", NULL, is_head, resp);
 					return -1;
 				}
 
@@ -712,8 +709,7 @@ serve_static_file(FILE *stream, const struct http_request *req,
 				entries[nent].is_dir = 0;
 				if (snprintf(pathbuf, sizeof(pathbuf), "%s/%s", fullpath,
 				             name) < (int)sizeof(pathbuf) &&
-				    stat(pathbuf, &st_index) == 0 &&
-				    S_ISDIR(st_index.st_mode))
+				    stat(pathbuf, &st_index) == 0 && S_ISDIR(st_index.st_mode))
 				{
 					entries[nent].is_dir = 1;
 				}
@@ -735,8 +731,7 @@ serve_static_file(FILE *stream, const struct http_request *req,
 				}
 				free(entries);
 				const char *msg = "500 Internal Server Error\n";
-				craft_http_response(stream,
-				                    HTTP_STATUS_INTERNAL_SERVER_ERROR,
+				craft_http_response(stream, HTTP_STATUS_INTERNAL_SERVER_ERROR,
 				                    "Internal Server Error", msg, "text/plain",
 				                    NULL, is_head, resp);
 				return -1;
@@ -768,11 +763,11 @@ serve_static_file(FILE *stream, const struct http_request *req,
 			char lastmod[64];
 			struct tm gmt;
 			gmtime_r(&st.st_mtime, &gmt);
-			strftime(lastmod, sizeof(lastmod),
-			         "%a, %d %b %Y %H:%M:%S GMT", &gmt);
+			strftime(lastmod, sizeof(lastmod), "%a, %d %b %Y %H:%M:%S GMT",
+			         &gmt);
 
-			craft_http_response(stream, HTTP_STATUS_OK, "OK", body,
-			                    "text/html", lastmod, is_head, resp);
+			craft_http_response(stream, HTTP_STATUS_OK, "OK", body, "text/html",
+			                    lastmod, is_head, resp);
 
 			for (size_t i = 0; i < nent; i++)
 			{
@@ -835,8 +830,7 @@ serve_static_file(FILE *stream, const struct http_request *req,
 	char lastmod[64];
 	struct tm gmt;
 	gmtime_r(&st.st_mtime, &gmt);
-	strftime(lastmod, sizeof(lastmod),
-	         "%a, %d %b %Y %H:%M:%S GMT", &gmt);
+	strftime(lastmod, sizeof(lastmod), "%a, %d %b %Y %H:%M:%S GMT", &gmt);
 
 	craft_http_response(stream, HTTP_STATUS_OK, "OK", buf, ctype, lastmod,
 	                    is_head, resp);
@@ -863,8 +857,7 @@ handle_http_connection(FILE *stream, const struct server_config *cfg,
 
 	if (res != HTTP_PARSE_OK)
 	{
-<|diff_marker|> ADD A1000
-		enum HTTP_STATUS_CODE status;
+		<| diff_marker |> ADD A1000 enum HTTP_STATUS_CODE status;
 		const char *text;
 		const char *body;
 
@@ -884,8 +877,7 @@ handle_http_connection(FILE *stream, const struct server_config *cfg,
 
 		case HTTP_PARSE_INVALID_URI:
 		case HTTP_PARSE_LINE_FAILURE:
-<|diff_marker|> ADD A1020
-		case HTTP_PARSE_EOF:
+		<| diff_marker |> ADD A1020 case HTTP_PARSE_EOF:
 		default:
 			status = HTTP_STATUS_BAD_REQUEST;
 			text = "Bad Request";
@@ -905,9 +897,9 @@ handle_http_connection(FILE *stream, const struct server_config *cfg,
 	if (normalize_path(req->path, norm, sizeof(norm)) < 0)
 	{
 		const char *body = "400 Bad Request\n";
-<|diff_marker|> ADD A1040
-		craft_http_response(stream, HTTP_STATUS_BAD_REQUEST, "Bad Request",
-		                    body, "text/plain", NULL, is_head, resp);
+		<| diff_marker |> ADD A1040 craft_http_response(
+			stream, HTTP_STATUS_BAD_REQUEST, "Bad Request", body, "text/plain",
+			NULL, is_head, resp);
 		return -1;
 	}
 
@@ -926,8 +918,7 @@ handle_http_connection(FILE *stream, const struct server_config *cfg,
 			craft_http_response(stream, HTTP_STATUS_INTERNAL_SERVER_ERROR,
 			                    "Internal Server Error", body, "text/plain",
 			                    NULL, is_head, resp);
-<|diff_marker|> ADD A1060
-			return -1;
+			<| diff_marker |> ADD A1060 return -1;
 		}
 		/* cgi_handle already sent a full HTTP response and filled resp */
 		return 0;

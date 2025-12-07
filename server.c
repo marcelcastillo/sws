@@ -183,7 +183,8 @@ handleConnection(int fd, struct sockaddr_storage client,
 		printf("Client connected from %s\n", rip);
 	}
 
-	if (setenv("REMOTE_ADDR", rip, 1) == -1) {
+	if (setenv("REMOTE_ADDR", rip, 1) == -1)
+	{
 		/* ignore */
 	}
 
@@ -195,7 +196,8 @@ handleConnection(int fd, struct sockaddr_storage client,
 
 	{
 		char hostbuf[256];
-		if (gethostname(hostbuf, sizeof(hostbuf)) == 0) {
+		if (gethostname(hostbuf, sizeof(hostbuf)) == 0)
+		{
 			hostbuf[sizeof(hostbuf) - 1] = '\0';
 			setenv("SERVER_NAME", hostbuf, 1);
 		}

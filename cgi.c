@@ -81,8 +81,7 @@ cgi_handle(FILE *stream, const struct http_request *req, const char *cgi_dir,
 	int status;
 	int pfd[2];
 
-	if (cgi_build_script_path(req, cgi_dir,
-	                          script_path, sizeof(script_path),
+	if (cgi_build_script_path(req, cgi_dir, script_path, sizeof(script_path),
 	                          script_name, sizeof(script_name),
 	                          &query_string) < 0)
 	{
@@ -196,8 +195,8 @@ cgi_handle(FILE *stream, const struct http_request *req, const char *cgi_dir,
 	size_t header_end = 0;
 	for (size_t i = 0; i + 3 < buf_len; i++)
 	{
-		if (buf[i] == '\r' && buf[i + 1] == '\n' &&
-		    buf[i + 2] == '\r' && buf[i + 3] == '\n')
+		if (buf[i] == '\r' && buf[i + 1] == '\n' && buf[i + 2] == '\r' &&
+		    buf[i + 3] == '\n')
 		{
 			header_end = i + 4;
 			break;
@@ -303,8 +302,7 @@ cgi_handle(FILE *stream, const struct http_request *req, const char *cgi_dir,
 	}
 
 	/* Wrap in a proper HTTP/1.0 response */
-	craft_http_response(stream, HTTP_STATUS_OK, "OK",
-	                    body, content_type, NULL,
+	craft_http_response(stream, HTTP_STATUS_OK, "OK", body, content_type, NULL,
 	                    is_head, resp);
 
 	free(body);

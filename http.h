@@ -16,7 +16,8 @@ struct http_request
 	char request_line[MAX_URI + MAX_METHOD + MAX_VERSION + 4];
 };
 
-struct http_response {
+struct http_response
+{
 	int status_code;
 	size_t content_len;
 };
