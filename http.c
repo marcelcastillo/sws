@@ -5,12 +5,12 @@
 #include <ctype.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <magic.h>
 #include <regex.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
-#include <magic.h>
 
 #include "cgi.h"
 #include "server.h"
@@ -18,7 +18,8 @@
 int
 validate_method(const char *method)
 {
-	if ((strcmp(method, "GET") == 0) || (strcmp(method, "HEAD") == 0)) {
+	if ((strcmp(method, "GET") == 0) || (strcmp(method, "HEAD") == 0))
+	{
 		return 0;
 	}
 	return -1;
@@ -27,13 +28,16 @@ validate_method(const char *method)
 int
 hexval(int c)
 {
-	if (c >= '0' && c <= '9') {
+	if (c >= '0' && c <= '9')
+	{
 		return c - '0';
 	}
-	if (c >= 'A' && c <= 'F') {
+	if (c >= 'A' && c <= 'F')
+	{
 		return c - 'A' + 10;
 	}
-	if (c >= 'a' && c <= 'f') {
+	if (c >= 'a' && c <= 'f')
+	{
 		return c - 'a' + 10;
 	}
 	return -1;
@@ -46,26 +50,33 @@ normalize_path(const char *uri_path, char *out, size_t outsz)
 	size_t ti = 0;
 
 	// Percent-decode into tmp
-	for (size_t i = 0; uri_path[i] != '\0';) {
+	for (size_t i = 0; uri_path[i] != '\0';)
+	{
 		unsigned char c = (unsigned char)uri_path[i];
 
-		if (c == '%') {
+		if (c == '%')
+		{
 			int h1, h2;
-			if (!uri_path[i + 1] || !uri_path[i + 2]) {
+			if (!uri_path[i + 1] || !uri_path[i + 2])
+			{
 				return -1; // incomplete escape
 			}
 			h1 = hexval((unsigned char)uri_path[i + 1]);
 			h2 = hexval((unsigned char)uri_path[i + 2]);
-			if (h1 < 0 || h2 < 0) {
+			if (h1 < 0 || h2 < 0)
+			{
 				return -1; // invalid hex
 			}
 			c = (unsigned char)((h1 << 4) | h2);
 			i += 3;
-		} else {
+		}
+		else
+		{
 			i++;
 		}
 
-		if (ti + 1 >= sizeof(tmp)) {
+		if (ti + 1 >= sizeof(tmp))
+		{
 			return -1; // overflow
 		}
 		tmp[ti++] = (char)c;
@@ -77,56 +88,71 @@ normalize_path(const char *uri_path, char *out, size_t outsz)
 
 	// Always work with a leading '/', since sws paths are rooted
 	const char *p = tmp;
-	if (*p != '/') {
+	if (*p != '/')
+	{
 		// treat relative like rooted at '/'
-		if (out_len + 1 >= outsz) {
+		if (out_len + 1 >= outsz)
+		{
 			return -1;
 		}
 		out[out_len++] = '/';
-	} else {
+	}
+	else
+	{
 		// copy initial slash
-		if (out_len + 1 >= outsz) {
+		if (out_len + 1 >= outsz)
+		{
 			return -1;
 		}
 		out[out_len++] = *p++;
 	}
 
-	while (*p != '\0') {
+	while (*p != '\0')
+	{
 		// Skip repeated slashes
-		if (*p == '/') {
+		if (*p == '/')
+		{
 			p++;
 			continue;
 		}
 
 		// Find next segment [p, q)
 		const char *seg_start = p;
-		while (*p != '\0' && *p != '/') {
+		while (*p != '\0' && *p != '/')
+		{
 			p++;
 		}
 		const char *seg_end = p;
 		size_t seg_len = (size_t)(seg_end - seg_start);
 
 		// Segment content decisions: ".", "..", or normal
-		if (seg_len == 1 && seg_start[0] == '.') {
+		if (seg_len == 1 && seg_start[0] == '.')
+		{
 			// "." -> skip
 			continue;
 		}
-		if (seg_len == 2 && seg_start[0] == '.' && seg_start[1] == '.') {
+		if (seg_len == 2 && seg_start[0] == '.' && seg_start[1] == '.')
+		{
 			// ".." -> pop last segment, but not leading '/'
 			// Remove trailing slash if present
-			if (out_len > 1) {
+			if (out_len > 1)
+			{
 				// drop trailing slash if any
-				if (out[out_len - 1] == '/') {
+				if (out[out_len - 1] == '/')
+				{
 					out_len--;
 				}
 
 				// walk back to previous '/'
-				while (out_len > 1 && out[out_len - 1] != '/') {
+				while (out_len > 1 && out[out_len - 1] != '/')
+				{
 					out_len--;
 				}
 
 				// if we ended up at '/', we effectively popped a segment
-			} else {
+			}
+			else
+			{
 				// would escape above root
 				return -1;
 			}
@@ -134,14 +160,17 @@ normalize_path(const char *uri_path, char *out, size_t outsz)
 		}
 
 		// Normal segment: append "/" if needed, then segment
-		if (out_len == 0 || out[out_len - 1] != '/') {
-			if (out_len + 1 >= outsz) {
+		if (out_len == 0 || out[out_len - 1] != '/')
+		{
+			if (out_len + 1 >= outsz)
+			{
 				return -1;
 			}
 			out[out_len++] = '/';
 		}
 
-		if (out_len + seg_len >= outsz) {
+		if (out_len + seg_len >= outsz)
+		{
 			return -1;
 		}
 		memcpy(out + out_len, seg_start, seg_len);
@@ -149,13 +178,17 @@ normalize_path(const char *uri_path, char *out, size_t outsz)
 	}
 
 	// Special case: if result is empty, use "/"
-	if (out_len == 0) {
-		if (outsz < 2) {
+	if (out_len == 0)
+	{
+		if (outsz < 2)
+		{
 			return -1;
 		}
 		out[0] = '/';
 		out[1] = '\0';
-	} else {
+	}
+	else
+	{
 		out[out_len] = '\0';
 	}
 
@@ -168,19 +201,22 @@ validate_uri(const char *uri)
 	size_t len;
 	const char *p;
 
-	if (uri == NULL) {
+	if (uri == NULL)
+	{
 		return -1;
 	}
 
 	/* Must be non-empty and start with '/' */
-	if (uri[0] == '\0' || uri[0] != '/') {
+	if (uri[0] == '\0' || uri[0] != '/')
+	{
 		return -1;
 	}
 
 	len = strlen(uri);
 
 	/* Optional: length check */
-	if (len >= MAX_URI) {
+	if (len >= MAX_URI)
+	{
 		return -1;
 	}
 
@@ -189,14 +225,16 @@ validate_uri(const char *uri)
 	 * "/../" or end with "/.." or start with "../".
 	 */
 	p = uri;
-	while ((p = strstr(p, "..")) != NULL) {
+	while ((p = strstr(p, "..")) != NULL)
+	{
 		int at_start = (p == uri);
 		int preceded_by_slash = (p > uri && p[-1] == '/');
 		int followed_by_slash = (p[2] == '/');
 		int ends_here = (p[2] == '\0');
 
 		if ((at_start && (followed_by_slash || ends_here)) ||
-		    (preceded_by_slash && (followed_by_slash || ends_here))) {
+		    (preceded_by_slash && (followed_by_slash || ends_here)))
+		{
 			return -1;
 		}
 		p += 2;
@@ -212,7 +250,8 @@ validate_uri(const char *uri)
 int
 validate_version(const char *version)
 {
-	if (strcmp(version, "HTTP/1.0") == 0 || strcmp(version, "HTTP/1.1") == 0) {
+	if (strcmp(version, "HTTP/1.0") == 0 || strcmp(version, "HTTP/1.1") == 0)
+	{
 		return 0;
 	}
 	return -1;
@@ -223,10 +262,11 @@ extract_header(const char *line, const char *header_name, char *out,
                size_t out_sz)
 {
 	size_t name_len = strlen(header_name);
-	if (strncasecmp(line, header_name, name_len) == 0 &&
-	    line[name_len] == ':') {
+	if (strncasecmp(line, header_name, name_len) == 0 && line[name_len] == ':')
+	{
 		const char *val = line + name_len + 1;
-		while (*val && isspace((unsigned char)*val)) {
+		while (*val && isspace((unsigned char)*val))
+		{
 			val++;
 		}
 		strncpy(out, val, out_sz - 1);
@@ -269,7 +309,8 @@ parse_request_line(char *line, char *method, size_t method_sz, char *path,
 
 	// request line cant contain \r or \n except at end (which must have both)
 	char *sp1 = strchr(p, ' ');
-	if (!sp1) {
+	if (!sp1)
+	{
 		return -1;
 	}
 	*sp1 = '\0';
@@ -277,7 +318,8 @@ parse_request_line(char *line, char *method, size_t method_sz, char *path,
 	method[method_sz - 1] = '\0';
 	p = sp1 + 1;
 	char *sp2 = strchr(p, ' ');
-	if (!sp2) {
+	if (!sp2)
+	{
 		return -1;
 	}
 	*sp2 = '\0';
@@ -285,7 +327,8 @@ parse_request_line(char *line, char *method, size_t method_sz, char *path,
 	path[path_sz - 1] = '\0';
 	p = sp2 + 1;
 	char *crlf = strstr(p, "\r\n");
-	if (!crlf) {
+	if (!crlf)
+	{
 		return -1;
 	}
 	*crlf = '\0';
@@ -306,7 +349,8 @@ parse_http_request(FILE *stream, struct http_request *request)
 	char line[2048];
 	memset(request, 0, sizeof(*request));
 
-	if (fgets(line, sizeof(line), stream) == NULL) {
+	if (fgets(line, sizeof(line), stream) == NULL)
+	{
 		return HTTP_PARSE_EOF;
 	}
 
@@ -315,29 +359,36 @@ parse_http_request(FILE *stream, struct http_request *request)
 	request->request_line[sizeof(request->request_line) - 1] = '\0';
 
 	if (parse_request_line(line, request->method, MAX_METHOD, request->path,
-	                       MAX_URI, request->version, MAX_VERSION) != 0) {
+	                       MAX_URI, request->version, MAX_VERSION) != 0)
+	{
 		return HTTP_PARSE_LINE_FAILURE;
 	}
 
-	if (validate_method(request->method) == -1) {
+	if (validate_method(request->method) == -1)
+	{
 		return HTTP_PARSE_INVALID_METHOD;
 	}
-	if (validate_uri(request->path) == -1) {
+	if (validate_uri(request->path) == -1)
+	{
 		return HTTP_PARSE_INVALID_URI;
 	}
-	if (validate_version(request->version) == -1) {
+	if (validate_version(request->version) == -1)
+	{
 		return HTTP_PARSE_INVALID_VERSION;
 	}
 
 	request->if_modified_since[0] = '\0';
-	while (fgets(line, sizeof(line), stream) != NULL) {
+	while (fgets(line, sizeof(line), stream) != NULL)
+	{
 		if (extract_header(line, "If-Modified-Since",
 		                   request->if_modified_since,
-		                   sizeof(request->if_modified_since)) == 0) {
+		                   sizeof(request->if_modified_since)) == 0)
+		{
 			continue;
 		}
 
-		if (strcmp(line, "\r\n") == 0 || strcmp(line, "\n") == 0) {
+		if (strcmp(line, "\r\n") == 0 || strcmp(line, "\n") == 0)
+		{
 			break;
 		}
 	}
@@ -365,12 +416,14 @@ craft_http_response(FILE *stream, enum HTTP_STATUS_CODE status_code,
 	fprintf(stream, "Content-Type: %s\r\n",
 	        content_type ? content_type : "text/plain");
 	fprintf(stream, "\r\n");
-	if (!is_head && body) {
+	if (!is_head && body)
+	{
 		fprintf(stream, "%s", body);
 	}
 
 	/* Add to the resp struct */
-	if (resp) {
+	if (resp)
+	{
 		resp->status_code = status_code;
 		resp->content_len = len;
 	}
@@ -381,40 +434,44 @@ craft_http_response(FILE *stream, enum HTTP_STATUS_CODE status_code,
 static const char *
 guess_content_type(const char *path)
 {
-    static struct magic_set *ms = NULL;
-    const char *mime;
+	static struct magic_set *ms = NULL;
+	const char *mime;
 
-    if (ms == NULL) {
-        ms = magic_open(MAGIC_MIME_TYPE | MAGIC_ERROR);
-        if (ms == NULL) {
-            return "application/octet-stream";
-        }
+	if (ms == NULL)
+	{
+		ms = magic_open(MAGIC_MIME_TYPE | MAGIC_ERROR);
+		if (ms == NULL)
+		{
+			return "application/octet-stream";
+		}
 
 #if __sun
-        /* OmniOS */
-        if (magic_load(ms, "/opt/magic/share/misc/magic.mgc") != 0) {
-            magic_close(ms);
-            ms = NULL;
-            return "application/octet-stream";
-        }
+		/* OmniOS */
+		if (magic_load(ms, "/opt/magic/share/misc/magic.mgc") != 0)
+		{
+			magic_close(ms);
+			ms = NULL;
+			return "application/octet-stream";
+		}
 #else
-        /* Linux/NetBSD */
-        if (magic_load(ms, NULL) != 0) {
-            magic_close(ms);
-            ms = NULL;
-            return "application/octet-stream";
-        }
+		/* Linux/NetBSD */
+		if (magic_load(ms, NULL) != 0)
+		{
+			magic_close(ms);
+			ms = NULL;
+			return "application/octet-stream";
+		}
 #endif
-    }
+	}
 
-    mime = magic_file(ms, path);
-    if (mime == NULL) {
-        return "application/octet-stream";
-    }
+	mime = magic_file(ms, path);
+	if (mime == NULL)
+	{
+		return "application/octet-stream";
+	}
 
-    return mime;
+	return mime;
 }
-
 
 static int
 serve_static_file(FILE *stream, const struct http_request *req,
@@ -428,7 +485,8 @@ serve_static_file(FILE *stream, const struct http_request *req,
 	ssize_t nread;
 	size_t total = 0;
 
-	if (cfg->docroot == NULL) {
+	if (cfg->docroot == NULL)
+	{
 		const char *body = "500 Internal Server Error\n";
 		craft_http_response(stream, HTTP_STATUS_INTERNAL_SERVER_ERROR,
 		                    "Internal Server Error", body, "text/plain", 0,
@@ -438,14 +496,16 @@ serve_static_file(FILE *stream, const struct http_request *req,
 
 	/* Build full path: docroot + path */
 	if (snprintf(fullpath, sizeof(fullpath), "%s%s", cfg->docroot, req->path) >=
-	    (int)sizeof(fullpath)) {
+	    (int)sizeof(fullpath))
+	{
 		const char *body = "414 Request-URI Too Long\n";
 		craft_http_response(stream, HTTP_STATUS_BAD_REQUEST, "Bad Request",
 		                    body, "text/plain", 0, resp);
 		return -1;
 	}
 
-	if (stat(fullpath, &st) == -1) {
+	if (stat(fullpath, &st) == -1)
+	{
 		const char *body = "404 Not Found\n";
 		craft_http_response(stream, HTTP_STATUS_NOT_FOUND, "Not Found", body,
 		                    "text/plain", 0, resp);
@@ -453,13 +513,15 @@ serve_static_file(FILE *stream, const struct http_request *req,
 	}
 
 	/* If it's a directory, try index.html for now */
-	if (S_ISDIR(st.st_mode)) {
+	if (S_ISDIR(st.st_mode))
+	{
 		char indexpath[PATH_MAX];
 
 		if (snprintf(indexpath, sizeof(indexpath), "%s%s%s", cfg->docroot,
 		             req->path,
 		             (req->path[strlen(req->path) - 1] == '/') ? "" : "/") >=
-		    (int)sizeof(indexpath)) {
+		    (int)sizeof(indexpath))
+		{
 			const char *body = "400 Bad Request\n";
 			craft_http_response(stream, HTTP_STATUS_BAD_REQUEST, "Bad Request",
 			                    body, "text/plain", 0, resp);
@@ -469,7 +531,8 @@ serve_static_file(FILE *stream, const struct http_request *req,
 		strncat(indexpath, "index.html",
 		        sizeof(indexpath) - strlen(indexpath) - 1);
 
-		if (stat(indexpath, &st) == -1 || !S_ISREG(st.st_mode)) {
+		if (stat(indexpath, &st) == -1 || !S_ISREG(st.st_mode))
+		{
 			const char *body = "403 Forbidden\n";
 			craft_http_response(stream, HTTP_STATUS_FORBIDDEN, "Forbidden",
 			                    body, "text/plain", 0, resp);
@@ -481,7 +544,8 @@ serve_static_file(FILE *stream, const struct http_request *req,
 		fullpath[sizeof(fullpath) - 1] = '\0';
 	}
 
-	if (!S_ISREG(st.st_mode)) {
+	if (!S_ISREG(st.st_mode))
+	{
 		const char *body = "403 Forbidden\n";
 		craft_http_response(stream, HTTP_STATUS_FORBIDDEN, "Forbidden", body,
 		                    "text/plain", 0, resp);
@@ -489,7 +553,8 @@ serve_static_file(FILE *stream, const struct http_request *req,
 	}
 
 	fd = open(fullpath, O_RDONLY);
-	if (fd == -1) {
+	if (fd == -1)
+	{
 		const char *body = "403 Forbidden\n";
 		craft_http_response(stream, HTTP_STATUS_FORBIDDEN, "Forbidden", body,
 		                    "text/plain", 0, resp);
@@ -498,7 +563,8 @@ serve_static_file(FILE *stream, const struct http_request *req,
 
 	/* Very simple: read whole file into memory */
 	buf = malloc(st.st_size + 1);
-	if (!buf) {
+	if (!buf)
+	{
 		close(fd);
 		const char *body = "500 Internal Server Error\n";
 		craft_http_response(stream, HTTP_STATUS_INTERNAL_SERVER_ERROR,
@@ -507,7 +573,8 @@ serve_static_file(FILE *stream, const struct http_request *req,
 		return -1;
 	}
 
-	while ((nread = read(fd, buf + total, st.st_size - total)) > 0) {
+	while ((nread = read(fd, buf + total, st.st_size - total)) > 0)
+	{
 		total += (size_t)nread;
 	}
 
@@ -536,12 +603,14 @@ handle_http_connection(FILE *stream, const struct server_config *cfg,
 
 	res = parse_http_request(stream, req);
 
-	if (res != HTTP_PARSE_OK) {
+	if (res != HTTP_PARSE_OK)
+	{
 		enum HTTP_STATUS_CODE status;
 		const char *text;
 		const char *body;
 
-		switch (res) {
+		switch (res)
+		{
 		case HTTP_PARSE_INVALID_METHOD:
 			status = HTTP_STATUS_NOT_IMPLEMENTED;
 			text = "Not Implemented";
@@ -572,7 +641,8 @@ handle_http_connection(FILE *stream, const struct server_config *cfg,
 
 	/* CGI: /cgi-bin/... and cgi_dir configured */
 	char norm[PATH_MAX];
-	if (normalize_path(req->path, norm, sizeof(norm)) < 0) {
+	if (normalize_path(req->path, norm, sizeof(norm)) < 0)
+	{
 		const char *body = "400 Bad Request\n";
 		craft_http_response(stream, HTTP_STATUS_BAD_REQUEST, "Bad Request",
 		                    body, "text/plain", is_head, resp);
@@ -583,10 +653,12 @@ handle_http_connection(FILE *stream, const struct server_config *cfg,
 	strncpy(req->path, norm, sizeof(req->path));
 	req->path[sizeof(req->path) - 1] = '\0';
 
-	if (cfg && cfg->cgi_dir && strncmp(req->path, "/cgi-bin/", 9) == 0) {
+	if (cfg && cfg->cgi_dir && strncmp(req->path, "/cgi-bin/", 9) == 0)
+	{
 		fflush(stream); /* flush any buffered input/output */
 		int fd = fileno(stream);
-		if (fd == -1 || cgi_handle(fd, req, cfg->cgi_dir) < 0) {
+		if (fd == -1 || cgi_handle(fd, req, cfg->cgi_dir) < 0)
+		{
 			const char *body = "500 Internal Server Error\n";
 			craft_http_response(stream, HTTP_STATUS_INTERNAL_SERVER_ERROR,
 			                    "Internal Server Error", body, "text/plain",
@@ -598,7 +670,8 @@ handle_http_connection(FILE *stream, const struct server_config *cfg,
 
 	/* HEAD: we can still reuse serve_static_file, then ignore body later if
 	   needed. */
-	if (serve_static_file(stream, req, cfg, is_head, resp) < 0) {
+	if (serve_static_file(stream, req, cfg, is_head, resp) < 0)
+	{
 		/* serve_static_file already sent an error */
 		return -1;
 	}

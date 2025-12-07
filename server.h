@@ -6,7 +6,8 @@
 
 #include <stdio.h>
 
-struct server_config {
+struct server_config
+{
 
 	char *cgi_dir;
 	int debug_mode;
@@ -16,7 +17,7 @@ struct server_config {
 	int have_bind_address;
 
 	char *logfile;
-    FILE *logfp;
+	FILE *logfp;
 
 	int port;
 

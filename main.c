@@ -31,7 +31,8 @@ validate_port(const char *port_str)
 	char *endptr;
 	long port = strtol(port_str, &endptr, 10);
 
-	if (*endptr != '\0' || port < 1 || port > 65535) {
+	if (*endptr != '\0' || port < 1 || port > 65535)
+	{
 		fprintf(stderr, "Invalid port number: %s\n", port_str);
 		exit(1);
 	}
@@ -49,7 +50,8 @@ validate_address(const char *addr_str, struct sockaddr_storage *storage)
 	struct in6_addr ipv6;
 
 	/* IPv4 */
-	if (inet_pton(AF_INET, addr_str, &ipv4) == 1) {
+	if (inet_pton(AF_INET, addr_str, &ipv4) == 1)
+	{
 		struct sockaddr_in *sin = (struct sockaddr_in *)storage;
 		memset(sin, 0, sizeof(*sin));
 		sin->sin_family = AF_INET;
@@ -58,7 +60,8 @@ validate_address(const char *addr_str, struct sockaddr_storage *storage)
 	}
 
 	/* IPv6 */
-	if (inet_pton(AF_INET6, addr_str, &ipv6) == 1) {
+	if (inet_pton(AF_INET6, addr_str, &ipv6) == 1)
+	{
 		struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *)storage;
 		memset(sin6, 0, sizeof(*sin6));
 		sin6->sin6_family = AF_INET6;
@@ -80,19 +83,27 @@ print_options(char *cgi_dir, int debug_mode, struct sockaddr_storage *bind_addr,
 {
 	printf("CGI Directory: %s\n", cgi_dir ? cgi_dir : "None");
 	printf("Debug Mode: %s\n", debug_mode ? "Enabled" : "Disabled");
-	if (have_bind_address) {
+	if (have_bind_address)
+	{
 		char addr_str[INET6_ADDRSTRLEN];
-		if (bind_addr->ss_family == AF_INET) {
+		if (bind_addr->ss_family == AF_INET)
+		{
 			struct sockaddr_in *sin = (struct sockaddr_in *)bind_addr;
 			inet_ntop(AF_INET, &sin->sin_addr, addr_str, sizeof(addr_str));
-		} else if (bind_addr->ss_family == AF_INET6) {
+		}
+		else if (bind_addr->ss_family == AF_INET6)
+		{
 			struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *)bind_addr;
 			inet_ntop(AF_INET6, &sin6->sin6_addr, addr_str, sizeof(addr_str));
-		} else {
+		}
+		else
+		{
 			strcpy(addr_str, "Unknown family");
 		}
 		printf("Bind Address: %s\n", addr_str);
-	} else {
+	}
+	else
+	{
 		printf("Bind Address: All\n");
 	}
 	printf("Bind Address Length: %d\n", bind_addrlen);
@@ -120,8 +131,10 @@ main(int argc, char *argv[])
 	int option;
 
 
-	while ((option = getopt(argc, argv, "c:di:l:p:h")) != -1) {
-		switch (option) {
+	while ((option = getopt(argc, argv, "c:di:l:p:h")) != -1)
+	{
+		switch (option)
+		{
 		case 'c':
 			cgi_dir = optarg;
 			break;
@@ -150,9 +163,12 @@ main(int argc, char *argv[])
 		}
 	}
 
-	if (optind < argc) {
+	if (optind < argc)
+	{
 		docroot = argv[optind];
-	} else {
+	}
+	else
+	{
 		fprintf(stderr, "Missing required document root directory argument!\n");
 		usage();
 		exit(1);

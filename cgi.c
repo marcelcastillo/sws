@@ -19,34 +19,41 @@ cgi_build_script_path(const struct http_request *req, const char *cgi_dir,
 	const char *qmark;
 	char script_rel[PATH_MAX];
 
-	if (cgi_dir == NULL) {
+	if (cgi_dir == NULL)
+	{
 		return -1;
 	}
 
 	/* URI must start with "/cgi-bin/" */
-	if (strncmp(uri, prefix, sizeof(prefix) - 1) != 0) {
+	if (strncmp(uri, prefix, sizeof(prefix) - 1) != 0)
+	{
 		return -1;
 	}
 
 	path_start = uri + (sizeof(prefix) - 1); /* after "/cgi-bin/" */
 	qmark = strchr(path_start, '?');
 
-	if (qmark != NULL) {
+	if (qmark != NULL)
+	{
 		size_t len = (size_t)(qmark - path_start);
-		if (len >= sizeof(script_rel)) {
+		if (len >= sizeof(script_rel))
+		{
 			return -1;
 		}
 		memcpy(script_rel, path_start, len);
 		script_rel[len] = '\0';
 		*query_string_out = qmark + 1;
-	} else {
+	}
+	else
+	{
 		strncpy(script_rel, path_start, sizeof(script_rel));
 		script_rel[sizeof(script_rel) - 1] = '\0';
 		*query_string_out = "";
 	}
 
 	if (snprintf(script_path, script_path_len, "%s/%s", cgi_dir, script_rel) >=
-	    (int)script_path_len) {
+	    (int)script_path_len)
+	{
 		return -1;
 	}
 
@@ -62,18 +69,21 @@ cgi_handle(int client_fd, const struct http_request *req, const char *cgi_dir)
 	int status;
 
 	if (cgi_build_script_path(req, cgi_dir, script_path, sizeof(script_path),
-	                          &query_string) < 0) {
+	                          &query_string) < 0)
+	{
 		/* Not a CGI URI or bad mapping */
 		return -1;
 	}
 
 	pid = fork();
-	if (pid < 0) {
+	if (pid < 0)
+	{
 		/* fork failed */
 		return -1;
 	}
 
-	if (pid == 0) {
+	if (pid == 0)
+	{
 		/*
 		 * Child: set up CGI environment and exec script.
 		 * For now, we let the CGI produce the full HTTP response
@@ -81,19 +91,23 @@ cgi_handle(int client_fd, const struct http_request *req, const char *cgi_dir)
 		 */
 		const char *method = req->method;
 
-		if (setenv("REQUEST_METHOD", method, 1) == -1) {
+		if (setenv("REQUEST_METHOD", method, 1) == -1)
+		{
 			_exit(1);
 		}
-		if (setenv("QUERY_STRING", query_string, 1) == -1) {
+		if (setenv("QUERY_STRING", query_string, 1) == -1)
+		{
 			_exit(1);
 		}
-		if (setenv("SERVER_PROTOCOL", "HTTP/1.0", 1) == -1) {
+		if (setenv("SERVER_PROTOCOL", "HTTP/1.0", 1) == -1)
+		{
 			_exit(1);
 		}
 
 		/* TODO LEFT: SCRIPT_NAME, REMOTE_ADDR, etc. */
 
-		if (dup2(client_fd, STDOUT_FILENO) == -1) {
+		if (dup2(client_fd, STDOUT_FILENO) == -1)
+		{
 			_exit(1);
 		}
 
@@ -104,7 +118,8 @@ cgi_handle(int client_fd, const struct http_request *req, const char *cgi_dir)
 	}
 
 	/* Parent: wait for child (avoid zombies) */
-	if (waitpid(pid, &status, 0) < 0) {
+	if (waitpid(pid, &status, 0) < 0)
+	{
 		return -1;
 	}
 
