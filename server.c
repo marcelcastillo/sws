@@ -183,6 +183,24 @@ handleConnection(int fd, struct sockaddr_storage client,
 		printf("Client connected from %s\n", rip);
 	}
 
+	if (setenv("REMOTE_ADDR", rip, 1) == -1) {
+		/* ignore */
+	}
+
+	{
+		char portbuf[16];
+		snprintf(portbuf, sizeof(portbuf), "%d", ntohs(config->port));
+		setenv("SERVER_PORT", portbuf, 1);
+	}
+
+	{
+		char hostbuf[256];
+		if (gethostname(hostbuf, sizeof(hostbuf)) == 0) {
+			hostbuf[sizeof(hostbuf) - 1] = '\0';
+			setenv("SERVER_NAME", hostbuf, 1);
+		}
+	}
+
 	FILE *stream = fdopen(fd, "r+");
 	if (stream == NULL)
 	{
@@ -272,7 +290,7 @@ runServer(struct server_config *config)
 
 	server_sock = createSocket(config);
 
-	/* Log file */
+	/* Logging */
 	if (config->logfile && !config->debug_mode)
 	{
 		if ((config->logfp = fopen(config->logfile, "a")) == NULL)
@@ -293,6 +311,13 @@ runServer(struct server_config *config)
 		handleSocket(server_sock, config);
 		printf("Debug mode exiting.\n");
 		return;
+	}
+
+	/* In normal mode... Daemonize. Don't change root */
+	if (daemon(1, 0) < 0)
+	{
+		perror("daemon");
+		exit(EXIT_FAILURE);
 	}
 
 	/* In normal mode */
@@ -325,5 +350,4 @@ runServer(struct server_config *config)
 			(void)printf("Idly sitting here, waiting for connections...\n");
 		}
 	}
-	return;
 }

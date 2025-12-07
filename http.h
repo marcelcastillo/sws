@@ -16,8 +16,7 @@ struct http_request
 	char request_line[MAX_URI + MAX_METHOD + MAX_VERSION + 4];
 };
 
-struct http_response
-{
+struct http_response {
 	int status_code;
 	size_t content_len;
 };
@@ -111,8 +110,8 @@ enum HTTP_PARSE_RESULT parse_http_request(FILE *stream,
  */
 int craft_http_response(FILE *stream, enum HTTP_STATUS_CODE status_code,
                         const char *status_text, const char *body,
-                        const char *content_type, int is_head,
-                        struct http_response *resp);
+                        const char *content_type, const char *last_modified,
+                        int is_head, struct http_response *resp);
 
 /*
  * Handles a single HTTP connection on the given stream.
