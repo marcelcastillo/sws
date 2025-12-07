@@ -7,7 +7,8 @@
 #define MAX_VERSION 16
 #define MAX_HEADER_VALUE 256
 
-struct http_request {
+struct http_request
+{
 	char method[MAX_METHOD];
 	char path[MAX_URI];
 	char version[MAX_VERSION];
@@ -22,7 +23,8 @@ struct http_response {
 
 struct server_config;
 
-enum HTTP_PARSE_RESULT {
+enum HTTP_PARSE_RESULT
+{
 	HTTP_PARSE_OK = 0,
 	HTTP_PARSE_INVALID_METHOD = -1,
 	HTTP_PARSE_INVALID_URI = -2,
@@ -31,7 +33,8 @@ enum HTTP_PARSE_RESULT {
 	HTTP_PARSE_LINE_FAILURE = -5,
 };
 
-enum HTTP_STATUS_CODE {
+enum HTTP_STATUS_CODE
+{
 	HTTP_STATUS_OK = 200,
 	HTTP_STATUS_CREATED = 201,
 	HTTP_STATUS_ACCEPTED = 202,

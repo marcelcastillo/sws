@@ -6,7 +6,8 @@
 
 #include <stdio.h>
 
-struct server_config {
+struct server_config
+{
 
 	char *cgi_dir;
 	int debug_mode;
